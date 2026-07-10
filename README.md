@@ -10,14 +10,19 @@ The package is intentionally boring: it generates predictable files that you can
 dart pub global activate clean_architect
 ```
 
-During local development:
+Use the global executable when generating into an empty folder:
 
 ```sh
-dart run clean_architect init
-dart run clean_architect create architecture
-dart run clean_architect create auth
-dart run clean_architect create feature profile
+mkdir my_app_architecture
+cd my_app_architecture
+clean_architect create architecture
 ```
+
+Use `dart run clean_architect ...` only when you are developing this package from its own checkout or running inside a Dart project that already has a `pubspec.yaml`.
+
+## Empty Folder Usage
+
+`dart run clean_architect create architecture` cannot run in an empty folder because `dart run` requires a local `pubspec.yaml` before the CLI is started. After activation, use `clean_architect create architecture` directly.
 
 ## Commands
 

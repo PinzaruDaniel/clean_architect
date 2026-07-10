@@ -3,16 +3,16 @@
 Create the config:
 
 ```sh
-dart run clean_architect init
+clean_architect init
 ```
 
 Generate a feature-first auth module:
 
 ```sh
-dart run clean_architect create architecture --dry-run
-dart run clean_architect create architecture
-dart run clean_architect create auth --dry-run
-dart run clean_architect create auth
+clean_architect create architecture --dry-run
+clean_architect create architecture
+clean_architect create auth --dry-run
+clean_architect create auth
 ```
 
 Generate a layered package feature:
@@ -34,5 +34,5 @@ clean_architect:
 ```
 
 ```sh
-dart run clean_architect create feature orders
+clean_architect create feature orders
 ```

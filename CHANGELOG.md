@@ -1,3 +1,8 @@
+## 0.1.1
+
+- Clarify empty-folder usage through the globally activated `clean_architect` executable.
+- Document `create architecture` as the default clean architecture scaffold command.
+
 ## 0.1.0
 
 - Add `clean_architect init`.
