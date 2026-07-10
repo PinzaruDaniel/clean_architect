@@ -1,3 +1,8 @@
+## 0.1.3
+
+- Refactor packages versions for layers.
+- Refactor initialization of feature controller and screen
+
 ## 0.1.2
 
 - Generate freezed entities and DTOs by default.

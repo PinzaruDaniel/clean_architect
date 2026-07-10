@@ -126,19 +126,16 @@ Future<void> initDi({required GetIt get}) async {
 String _domainPubspec(TemplateContext context) {
   final dependencies = <String>[];
   if (context.config.models.useFreezed) {
-    dependencies.add('  freezed_annotation: ^2.4.4');
-  }
-  if (context.config.models.useJsonSerializable ||
-      context.config.models.useFreezed) {
-    dependencies.add('  json_annotation: ^4.9.0');
+    dependencies.add('  freezed: ^3.2.5');
+    dependencies.add('  freezed_annotation: ^3.1.0');
   }
   if (context.config.dependencyInjection == DependencyInjection.injectable) {
-    dependencies.add('  injectable: ^2.5.0');
-    dependencies.add('  get_it: ^8.0.2');
+    dependencies.add('  injectable: ^3.0.0');
+    dependencies.add('  get_it: ^9.2.1');
   }
   final dependenciesBlock = dependencies.isEmpty
       ? ''
-      : '\ndependencies:\n${dependencies.join('\n')}\n\ndev_dependencies:\n  build_runner: ^2.4.13\n  json_serializable: ^6.9.0\n  freezed: ^2.5.7\n  injectable_generator: ^2.6.2\n';
+      : '\ndependencies:\n${dependencies.join('\n')}\n\ndev_dependencies:\n  build_runner: ^2.15.0\n  injectable_generator: \n';
 
   return '''
 name: ${_packageName(context.paths.domain)}
@@ -157,23 +154,24 @@ String _dataPubspec(TemplateContext context) {
   ];
 
   if (context.config.network == NetworkClient.dio) {
-    dependencies.add('  dio: ^5.7.0');
-    dependencies.add('  retrofit: ^4.4.1');
+    dependencies.add('  dio: ^5.9.1');
+    dependencies.add('  retrofit: ');
   }
   if (context.config.dependencyInjection == DependencyInjection.injectable) {
-    dependencies.add('  injectable: ^2.5.0');
-    dependencies.add('  get_it: ^8.0.2');
+    dependencies.add('  injectable: ^3.0.0');
+    dependencies.add('  get_it: ^9.2.1');
   }
   if (context.config.localStorage == LocalStorage.secureStorage) {
     dependencies.insert(0, '  flutter:\n    sdk: flutter');
     dependencies.add('  flutter_secure_storage: ^9.2.2');
   }
   if (context.config.models.useFreezed) {
-    dependencies.add('  freezed_annotation: ^2.4.4');
+    dependencies.add('  freezed: ^3.2.5');
+    dependencies.add('  freezed_annotation: ^3.1.0');
   }
   if (context.config.models.useJsonSerializable ||
       context.config.models.useFreezed) {
-    dependencies.add('  json_annotation: ^4.9.0');
+    dependencies.add('  json_annotation: ^4.12.0');
   }
 
   return '''
@@ -188,11 +186,10 @@ dependencies:
 ${dependencies.join('\n')}
 
 dev_dependencies:
-  build_runner: ^2.4.13
-  retrofit_generator: ^9.1.5
-  json_serializable: ^6.9.0
-  freezed: ^2.5.7
-  injectable_generator: ^2.6.2
+  build_runner: ^2.15.0
+  retrofit_generator:
+  json_serializable: ^6.14.0
+  injectable_generator: 
 ''';
 }
 
@@ -205,8 +202,8 @@ String _diPubspec(TemplateContext context) {
   ];
 
   if (context.config.dependencyInjection == DependencyInjection.injectable) {
-    dependencies.add('  injectable: ^2.5.0');
-    dependencies.add('  get_it: ^8.0.2');
+    dependencies.add('  injectable: ^3.0.0');
+    dependencies.add('  get_it: ^9.2.0');
   }
 
   return '''
@@ -222,8 +219,8 @@ ${dependencies.join('\n')}
 
 dev_dependencies:
   build_runner: ^2.4.13
-  retrofit_generator: ^9.1.5
-  json_serializable: ^6.9.0
+  retrofit_generator: 
+  json_serializable: ^6.12.0
   freezed: ^2.5.7
   injectable_generator: ^2.6.2
 ''';
@@ -242,10 +239,10 @@ String _presentationPubspec(TemplateContext context) {
   ];
 
   if (context.config.stateManagement == StateManagement.getx) {
-    dependencies.add('  get: ^4.6.6');
+    dependencies.add('  get: ^4.7.2');
   }
   if (context.config.dependencyInjection == DependencyInjection.injectable) {
-    dependencies.add('  get_it: ^8.0.2');
+    dependencies.add('  get_it:');
   }
 
   return '''

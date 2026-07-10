@@ -361,12 +361,13 @@ String _controller(TemplateContext context) {
 
   return '''
 ${getxImport}import '${_domainPresentationImport(context, 'usecases/get_${feature.snake}_list_use_case.dart')}';
+import 'package:get_it/get_it.dart';
+
 import '../widgets/${feature.snake}_view_item.dart';
 
 class ${feature.pascal}Controller$baseClass {
-  ${feature.pascal}Controller(this._get${feature.pascal}ListUseCase);
+  var _get${feature.pascal}ListUseCase = GetIt.instance.get<Get${feature.pascal}ListUseCase>();
 
-  final Get${feature.pascal}ListUseCase _get${feature.pascal}ListUseCase;
   var items = const <${feature.pascal}ViewItem>[];
 
   Future<void> load() async {
@@ -402,7 +403,7 @@ class _${feature.pascal}PageState extends State<${feature.pascal}Page> {
   @override
   void initState() {
     super.initState();
-    Get.put(${feature.pascal}Controller(Get.find<Get${feature.pascal}ListUseCase>()));
+    Get.put(${feature.pascal}Controller());
     controller = Get.find<${feature.pascal}Controller>();
     controller.load();
   }
