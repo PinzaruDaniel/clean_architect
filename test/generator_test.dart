@@ -130,6 +130,7 @@ void main() {
       network: NetworkClient.dio,
       localStorage: LocalStorage.abstract,
       dependencyInjection: DependencyInjection.manual,
+      useAssetGenerator: true,
       models: ModelConfig(
         useFreezed: true,
         useJsonSerializable: true,
@@ -167,6 +168,7 @@ void main() {
       network: NetworkClient.dio,
       localStorage: LocalStorage.secureStorage,
       dependencyInjection: DependencyInjection.injectable,
+      useAssetGenerator: true,
       models: ModelConfig(
         useFreezed: true,
         useJsonSerializable: true,

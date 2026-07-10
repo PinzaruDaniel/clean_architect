@@ -31,33 +31,35 @@ List<GeneratedFile> packageTemplates(
         content: _presentationPubspec(context),
       ),
       GeneratedFile(
-        path: p.join(
-            _packageRoot(context.paths.presentation), 'lib', 'main.dart'),
+        path: p.join(_packageRoot(context.paths.presentation), 'assets', 'images'),
+        content: '',
+      ),
+      GeneratedFile(
+        path: p.join(_packageRoot(context.paths.presentation), 'assets', 'icons'),
+        content: '',
+      ),
+      GeneratedFile(
+        path: p.join(_packageRoot(context.paths.presentation), 'lib', 'main.dart'),
         content: _presentationMain(),
       ),
       GeneratedFile(
-        path: p.join(_packageRoot(context.paths.presentation), 'lib', 'widgets',
-            '.gitkeep'),
+        path: p.join(_packageRoot(context.paths.presentation), 'lib', 'widgets', '.gitkeep'),
         content: '',
       ),
       GeneratedFile(
-        path: p.join(_packageRoot(context.paths.presentation), 'lib', 'pages',
-            '.gitkeep'),
+        path: p.join(_packageRoot(context.paths.presentation), 'lib', 'pages', '.gitkeep'),
         content: '',
       ),
       GeneratedFile(
-        path: p.join(_packageRoot(context.paths.presentation), 'lib', 'utils',
-            '.gitkeep'),
+        path: p.join(_packageRoot(context.paths.presentation), 'lib', 'utils', '.gitkeep'),
         content: '',
       ),
       GeneratedFile(
-        path: p.join(_packageRoot(context.paths.presentation), 'lib',
-            'controllers', '.gitkeep'),
+        path: p.join(_packageRoot(context.paths.presentation), 'lib', 'controllers', '.gitkeep'),
         content: '',
       ),
       GeneratedFile(
-        path: p.join(_packageRoot(context.paths.presentation), 'lib',
-            'constants', '.gitkeep'),
+        path: p.join(_packageRoot(context.paths.presentation), 'lib', 'constants', '.gitkeep'),
         content: '',
       ),
       GeneratedFile(
@@ -70,6 +72,12 @@ include: package:flutter_lints/flutter.yaml
 ''',
       ),
     ]);
+    if (context.config.useAssetGenerator) {
+      files.add(GeneratedFile(
+        path: p.join(_packageRoot(context.paths.presentation), 'asset_generator_kit.yaml'),
+        content: _assetGeneratorKit(),
+      ));
+    }
   }
 
   return files;
@@ -169,8 +177,7 @@ String _dataPubspec(TemplateContext context) {
     dependencies.add('  freezed: ^3.2.5');
     dependencies.add('  freezed_annotation: ^3.1.0');
   }
-  if (context.config.models.useJsonSerializable ||
-      context.config.models.useFreezed) {
+  if (context.config.models.useJsonSerializable || context.config.models.useFreezed) {
     dependencies.add('  json_annotation: ^4.12.0');
   }
 
@@ -244,6 +251,9 @@ String _presentationPubspec(TemplateContext context) {
   if (context.config.dependencyInjection == DependencyInjection.injectable) {
     dependencies.add('  get_it:');
   }
+  if(context.config.useAssetGenerator) {
+    dependencies.add('  assetgeneratorkit: ^0.1.0');
+  }
 
   return '''
 name: ${_packageName(context.paths.presentation)}
@@ -264,6 +274,21 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 ''';
+}
+
+String _assetGeneratorKit() {
+  return '''
+assetgeneratorkit:
+  input:
+    - assets/images
+    - assets/icons
+
+  output: lib/generated/assets.dart
+
+  integrations:
+    svg: true
+    lottie: false
+   ''';
 }
 
 String _presentationMain() {

@@ -22,6 +22,7 @@ class CleanArchitectConfig {
     required this.dependencyInjection,
     required this.models,
     required this.paths,
+    required this.useAssetGenerator
   });
 
   factory CleanArchitectConfig.defaults() {
@@ -31,6 +32,7 @@ class CleanArchitectConfig {
       network: NetworkClient.dio,
       localStorage: LocalStorage.secureStorage,
       dependencyInjection: DependencyInjection.manual,
+      useAssetGenerator: true,
       models: ModelConfig(
         useFreezed: true,
         useJsonSerializable: true,
@@ -96,6 +98,7 @@ class CleanArchitectConfig {
         _diName,
         defaults.dependencyInjection,
       ),
+      useAssetGenerator: root['use_asset_generator'],
       models: ModelConfig(
         useFreezed:
             _boolValue(models, 'use_freezed', defaults.models.useFreezed),
@@ -125,6 +128,7 @@ class CleanArchitectConfig {
   final DependencyInjection dependencyInjection;
   final ModelConfig models;
   final PathConfig paths;
+  final bool useAssetGenerator;
 
   static const fileName = 'clean_architect.yaml';
 
@@ -136,6 +140,7 @@ clean_architect:
   network: dio # dio or abstract
   local_storage: secure_storage # secure_storage or abstract
   dependency_injection: manual # manual or injectable
+  use_asset_generator: true
   models:
     use_freezed: true
     use_json_serializable: true

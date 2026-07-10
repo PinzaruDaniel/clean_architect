@@ -19,6 +19,7 @@ void main() {
       network: NetworkClient.abstract,
       localStorage: LocalStorage.abstract,
       dependencyInjection: DependencyInjection.manual,
+      useAssetGenerator: true,
       models: ModelConfig(
         useFreezed: false,
         useJsonSerializable: false,

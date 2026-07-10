@@ -128,6 +128,7 @@ class CleanArchitectCli {
     List<String> args,
     CleanArchitectGenerator generator,
     bool skipPresentation,
+
     String? featureOption,
   ) {
     switch (args.first) {
@@ -175,6 +176,7 @@ class CleanArchitectCli {
           _networkOverride(results['network'] as String?) ?? config.network,
       localStorage: _storageOverride(results['storage'] as String?) ??
           config.localStorage,
+      useAssetGenerator: config.useAssetGenerator,
       dependencyInjection: _dependencyInjectionOverride(
             results['dependency-injection'] as String? ??
                 results['di'] as String?,
