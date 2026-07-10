@@ -1,3 +1,8 @@
+## 0.1.4
+
+- local data source for auth and feature uses injectable package
+- Updated auth presentation layer to use GetX
+
 ## 0.1.3
 
 - Refactor packages versions for layers.

@@ -476,23 +476,25 @@ String _localSource(TemplateContext context) {
       : '';
   final constructor = secure
       ? '''
-  AuthLocalDataSource(this._storage);
+  AuthLocalDataSourceImpl(this._storage);
 
   final FlutterSecureStorage _storage;
 '''
       : '''
-  const AuthLocalDataSource();
+  const AuthLocalDataSourceImpl();
 ''';
   final body = secure
-      ? '''
+      ? '''+
   static const _usernameKey = 'auth_username';
   static const _passwordKey = 'auth_password';
 
+  @override
   Future<void> saveCredentials(AuthCredentialsEntity credentials) async {
     await _storage.write(key: _usernameKey, value: credentials.username);
     await _storage.write(key: _passwordKey, value: credentials.password);
   }
 
+  @override
   Future<AuthCredentialsEntity?> getCredentials() async {
     final username = await _storage.read(key: _usernameKey);
     final password = await _storage.read(key: _passwordKey);
@@ -504,30 +506,45 @@ String _localSource(TemplateContext context) {
     );
   }
 
+  @override
   Future<void> clearCredentials() async {
     await _storage.delete(key: _usernameKey);
     await _storage.delete(key: _passwordKey);
   }
 '''
       : '''
+  @override
   Future<void> saveCredentials(AuthCredentialsEntity credentials) async {
     // TODO: Save credentials using your local storage.
   }
 
+  @override
   Future<AuthCredentialsEntity?> getCredentials() async {
     // TODO: Read credentials using your local storage.
     return null;
   }
 
+  @override
   Future<void> clearCredentials() async {
     // TODO: Clear credentials using your local storage.
   }
 ''';
 
   return '''
-$import${_injectableImport(context)}import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
+${import}import 'package:injectable/injectable.dart';
 
-${_lazySingletonAnnotation(context)}class AuthLocalDataSource {
+import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
+
+abstract class AuthLocalDataSource {
+  Future<void> saveCredentials(AuthCredentialsEntity credentials);
+
+  Future<AuthCredentialsEntity?> getCredentials();
+
+  Future<void> clearCredentials();
+}
+
+@LazySingleton(as: AuthLocalDataSource)
+class AuthLocalDataSourceImpl implements AuthLocalDataSource {
 $constructor$body}
 ''';
 }
@@ -642,67 +659,60 @@ class LoginViewItem {
 
 String _authController(TemplateContext context) {
   final config = context.config;
-  if (config.stateManagement == StateManagement.getx) {
-    return '''
-import 'package:get/get.dart';
-
-import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
-import '${_domainImport(context, 'usecases/login_use_case.dart')}';
-import '../widgets/login_view_item.dart';
-
-class AuthController extends GetxController {
-  AuthController(this._loginUseCase);
-
-  final LoginUseCase _loginUseCase;
-  final viewItem = const LoginViewItem().obs;
-
-  Future<void> login() async {
-    viewItem.value = viewItem.value.copyWith(isLoading: true);
-    try {
-      await _loginUseCase(
-        AuthCredentialsEntity(
-          username: viewItem.value.username,
-          password: viewItem.value.password,
-        ),
-      );
-      viewItem.value = viewItem.value.copyWith(isLoading: false);
-    } catch (error) {
-      viewItem.value = viewItem.value.copyWith(
+  final getxImport = config.stateManagement == StateManagement.getx
+      ? "import 'package:get/get.dart';\n"
+      : '';
+  final baseClass = config.stateManagement == StateManagement.getx
+      ? ' extends GetxController'
+      : '';
+  final viewItemDeclaration = config.stateManagement == StateManagement.getx
+      ? 'final viewItem = const LoginViewItem().obs;'
+      : 'LoginViewItem viewItem = const LoginViewItem();';
+  final readUsername = config.stateManagement == StateManagement.getx
+      ? 'viewItem.value.username'
+      : 'viewItem.username';
+  final readPassword = config.stateManagement == StateManagement.getx
+      ? 'viewItem.value.password'
+      : 'viewItem.password';
+  final setLoading = config.stateManagement == StateManagement.getx
+      ? 'viewItem.value = viewItem.value.copyWith(isLoading: true);'
+      : 'viewItem = viewItem.copyWith(isLoading: true);';
+  final setLoaded = config.stateManagement == StateManagement.getx
+      ? 'viewItem.value = viewItem.value.copyWith(isLoading: false);'
+      : 'viewItem = viewItem.copyWith(isLoading: false);';
+  final setError = config.stateManagement == StateManagement.getx
+      ? '''viewItem.value = viewItem.value.copyWith(
         isLoading: false,
         errorMessage: error.toString(),
-      );
-    }
-  }
-}
-''';
-  }
+      );'''
+      : '''viewItem = viewItem.copyWith(
+        isLoading: false,
+        errorMessage: error.toString(),
+      );''';
 
   return '''
-import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
+${getxImport}import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
 import '${_domainImport(context, 'usecases/login_use_case.dart')}';
+import 'package:get_it/get_it.dart';
+
 import '../widgets/login_view_item.dart';
 
-class AuthController {
-  AuthController(this._loginUseCase);
-
-  final LoginUseCase _loginUseCase;
-  LoginViewItem viewItem = const LoginViewItem();
+class AuthController$baseClass {
+  var _loginUseCase = GetIt.instance.get<LoginUseCase>();
+  $viewItemDeclaration
 
   Future<void> login() async {
-    viewItem = viewItem.copyWith(isLoading: true);
+    $setLoading
     try {
       await _loginUseCase(
         AuthCredentialsEntity(
-          username: viewItem.username,
-          password: viewItem.password,
+          username: $readUsername,
+          password: $readPassword,
         ),
       );
-      viewItem = viewItem.copyWith(isLoading: false);
+      $setLoaded
     } catch (error) {
-      viewItem = viewItem.copyWith(
-        isLoading: false,
-        errorMessage: error.toString(),
-      );
+      $setError
     }
   }
 }
@@ -732,7 +742,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
-    Get.put(AuthController(Get.find<LoginUseCase>()));
+    Get.put(AuthController());
     controller = Get.find<AuthController>();
   }
 

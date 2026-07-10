@@ -76,9 +76,17 @@ ${_lazySingletonAnnotation(context)}class Get${feature.pascal}ListUseCase {
         '${feature.snake}_local_data_source.dart',
       ),
       content: '''
-class ${feature.pascal}LocalDataSource {
-  const ${feature.pascal}LocalDataSource();
+import 'package:injectable/injectable.dart';
 
+abstract class ${feature.pascal}LocalDataSource {
+  Future<void> cacheItems(List<Object> items);
+}
+
+@LazySingleton(as: ${feature.pascal}LocalDataSource)
+class ${feature.pascal}LocalDataSourceImpl implements ${feature.pascal}LocalDataSource {
+  const ${feature.pascal}LocalDataSourceImpl();
+
+  @override
   Future<void> cacheItems(List<Object> items) async {
     // TODO: Cache ${feature.title.toLowerCase()} items.
   }

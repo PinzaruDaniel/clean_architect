@@ -74,11 +74,30 @@ void main() {
     expect(apiService.content, contains("@POST('/authorization/token/')"));
     expect(apiService.content, contains('@Named("auth_dio") Dio dio'));
 
+    final localDataSource = files.singleWhere(
+      (file) => file.path.endsWith('auth_local_data_source.dart'),
+    );
+    expect(localDataSource.content,
+        contains('abstract class AuthLocalDataSource'));
+    expect(localDataSource.content,
+        contains('@LazySingleton(as: AuthLocalDataSource)'));
+    expect(
+      localDataSource.content,
+      contains('class AuthLocalDataSourceImpl implements AuthLocalDataSource'),
+    );
+
+    final authController = files.singleWhere(
+      (file) =>
+          file.path == 'presentation/lib/controllers/auth_controller.dart',
+    );
+    expect(
+        authController.content, contains('GetIt.instance.get<LoginUseCase>()'));
+
     final loginPage = files.singleWhere(
       (file) => file.path == 'presentation/lib/pages/login_page.dart',
     );
     expect(loginPage.content, contains('void initState()'));
-    expect(loginPage.content, contains('Get.put(AuthController'));
+    expect(loginPage.content, contains('Get.put(AuthController())'));
     expect(loginPage.content, contains('Get.find<AuthController>()'));
 
     final presentationPubspec = files.singleWhere(
