@@ -1,3 +1,6 @@
+## 0.1.5
+- Added a new caonfiguration option, `use_asset_generator`, that enables the asset generator kit.
+
 ## 0.1.4
 
 - local data source for auth and feature uses injectable package
