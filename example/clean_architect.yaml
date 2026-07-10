@@ -1,0 +1,14 @@
+clean_architect:
+  structure: layered_packages # layered_packages or feature_first
+  state_management: getx # getx or none
+  network: dio # dio or abstract
+  local_storage: secure_storage # secure_storage or abstract
+  dependency_injection: di # manual or di
+  models:
+    use_freezed: false
+    use_json_serializable: false
+  paths:
+    domain: domain/lib
+    data: data/lib/features
+    presentation: presentation/lib
+    di: di/lib
