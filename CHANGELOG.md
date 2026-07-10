@@ -1,3 +1,10 @@
+## 0.1.2
+
+- Generate freezed entities and DTOs by default.
+- Generate Retrofit API service templates for remote data sources.
+- Add injectable-style injector templates matching separated data/domain/di layers.
+- Update GetX pages to initialize and retrieve controllers with `Get.put` and `Get.find`.
+
 ## 0.1.1
 
 - Clarify empty-folder usage through the globally activated `clean_architect` executable.

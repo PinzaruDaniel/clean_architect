@@ -44,6 +44,7 @@ clean_architect create auth --dry-run
 clean_architect create auth --overwrite
 clean_architect create feature profile --skip-presentation
 clean_architect create auth --state getx --network dio --storage secure_storage
+clean_architect create auth --di injectable
 ```
 
 ## Configuration
@@ -57,8 +58,8 @@ clean_architect:
   network: dio # dio or abstract
   local_storage: secure_storage # secure_storage or abstract
   models:
-    use_freezed: false
-    use_json_serializable: false
+    use_freezed: true
+    use_json_serializable: true
   paths:
     domain: domain/lib
     data: data/lib/features
@@ -93,7 +94,7 @@ presentation/lib
 - State management: `getx`, `none`
 - Network: `dio`, `abstract`
 - Local storage: `secure_storage`, `abstract`
-- Model style: plain Dart, optional `json_serializable`
+- Model style: `freezed`/`json_serializable` by default, plain Dart fallback by config
 
 ## Doctor
 

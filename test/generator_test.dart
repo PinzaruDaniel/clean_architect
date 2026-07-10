@@ -48,11 +48,38 @@ void main() {
         contains('domain/lib/features/auth/entities/auth_token_entity.dart'));
     expect(paths,
         contains('domain/lib/features/auth/usecases/login_use_case.dart'));
-    expect(paths,
-        contains('data/lib/features/auth/remote/auth_remote_data_source.dart'));
+    expect(
+        paths, contains('data/lib/features/auth/remote/auth_api_service.dart'));
     expect(paths, contains('presentation/lib/pages/login_page.dart'));
     expect(paths, contains('data/lib/features/auth/local/models/.gitkeep'));
     expect(paths, contains('di/lib/auth_di.dart'));
+
+    final tokenEntity = files.singleWhere(
+      (file) => file.path.endsWith('auth_token_entity.dart'),
+    );
+    expect(tokenEntity.content, contains('@freezed'));
+    expect(tokenEntity.content,
+        contains("part 'auth_token_entity.freezed.dart';"));
+
+    final tokenDto = files.singleWhere(
+      (file) => file.path.endsWith('auth_token_dto.dart'),
+    );
+    expect(tokenDto.content, contains('@freezed'));
+    expect(tokenDto.content, contains("part 'auth_token_dto.g.dart';"));
+
+    final apiService = files.singleWhere(
+      (file) => file.path.endsWith('auth_api_service.dart'),
+    );
+    expect(apiService.content, contains('@RestApi(baseUrl:'));
+    expect(apiService.content, contains("@POST('/authorization/token/')"));
+    expect(apiService.content, contains('@Named("auth_dio") Dio dio'));
+
+    final loginPage = files.singleWhere(
+      (file) => file.path == 'presentation/lib/pages/login_page.dart',
+    );
+    expect(loginPage.content, contains('void initState()'));
+    expect(loginPage.content, contains('Get.put(AuthController'));
+    expect(loginPage.content, contains('Get.find<AuthController>()'));
 
     final presentationPubspec = files.singleWhere(
       (file) => file.path == 'presentation/pubspec.yaml',
@@ -77,16 +104,16 @@ void main() {
     expect(paths, isNot(contains('presentation/lib/pages/orders_page.dart')));
   });
 
-  test('generic feature uses configured network style', () {
+  test('generic feature generates retrofit api service and freezed dto', () {
     const config = CleanArchitectConfig(
       structure: ProjectStructure.featureFirst,
-      stateManagement: StateManagement.none,
-      network: NetworkClient.abstract,
+      stateManagement: StateManagement.getx,
+      network: NetworkClient.dio,
       localStorage: LocalStorage.abstract,
       dependencyInjection: DependencyInjection.manual,
       models: ModelConfig(
-        useFreezed: false,
-        useJsonSerializable: false,
+        useFreezed: true,
+        useJsonSerializable: true,
       ),
       paths: PathConfig(
         domain: 'domain/lib',
@@ -97,11 +124,53 @@ void main() {
     );
 
     final files = CleanArchitectGenerator(config).feature('profile');
-    final remoteSource = files.singleWhere(
-      (file) => file.path.endsWith('profile_remote_data_source.dart'),
+    final apiService = files.singleWhere(
+      (file) => file.path.endsWith('profile_api_service.dart'),
+    );
+    final dto = files.singleWhere(
+      (file) => file.path.endsWith('profile_dto.dart'),
+    );
+    final page = files.singleWhere(
+      (file) => file.path == 'presentation/lib/pages/profile_page.dart',
     );
 
-    expect(remoteSource.content, isNot(contains('package:dio/dio.dart')));
-    expect(remoteSource.content, contains('TODO: Fetch profile items'));
+    expect(apiService.content, contains('package:retrofit/retrofit.dart'));
+    expect(apiService.content, contains("@GET('/profile')"));
+    expect(dto.content, contains('@freezed'));
+    expect(page.content, contains('Get.find<ProfileController>()'));
+    expect(page.content, contains('controller.load();'));
+  });
+  test('injectable mode generates injector files and skips manual feature di',
+      () {
+    const config = CleanArchitectConfig(
+      structure: ProjectStructure.layeredPackages,
+      stateManagement: StateManagement.getx,
+      network: NetworkClient.dio,
+      localStorage: LocalStorage.secureStorage,
+      dependencyInjection: DependencyInjection.injectable,
+      models: ModelConfig(
+        useFreezed: true,
+        useJsonSerializable: true,
+      ),
+      paths: PathConfig(
+        domain: 'domain/lib',
+        data: 'data/lib/features',
+        presentation: 'presentation/lib',
+        di: 'di/lib',
+      ),
+    );
+
+    final files = CleanArchitectGenerator(config).auth();
+    final paths = files.map((file) => file.path).toSet();
+
+    expect(paths, contains('domain/lib/injector.dart'));
+    expect(paths, contains('data/lib/injector.dart'));
+    expect(paths, contains('di/lib/di.dart'));
+    expect(paths, isNot(contains('di/lib/auth_di.dart')));
+
+    final repository = files.singleWhere(
+      (file) => file.path.endsWith('auth_repository_impl.dart'),
+    );
+    expect(repository.content, contains('@lazySingleton'));
   });
 }

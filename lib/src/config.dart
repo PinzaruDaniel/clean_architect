@@ -32,8 +32,8 @@ class CleanArchitectConfig {
       localStorage: LocalStorage.secureStorage,
       dependencyInjection: DependencyInjection.manual,
       models: ModelConfig(
-        useFreezed: false,
-        useJsonSerializable: false,
+        useFreezed: true,
+        useJsonSerializable: true,
       ),
       paths: PathConfig(
         domain: 'domain/lib',
@@ -137,8 +137,8 @@ clean_architect:
   local_storage: secure_storage # secure_storage or abstract
   dependency_injection: manual # manual or injectable
   models:
-    use_freezed: false
-    use_json_serializable: false
+    use_freezed: true
+    use_json_serializable: true
   paths:
     domain: domain/lib
     data: data/lib/features

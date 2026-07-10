@@ -24,43 +24,16 @@ List<GeneratedFile> _domain(TemplateContext context) {
   return [
     GeneratedFile(
       path: p.join(domain, 'entities', 'auth_token_entity.dart'),
-      content: '''
-class AuthTokenEntity {
-  const AuthTokenEntity({
-    required this.accessToken,
-    this.refreshToken,
-    this.expiresAt,
-  });
-
-  final String accessToken;
-  final String? refreshToken;
-  final DateTime? expiresAt;
-
-  bool get isExpired {
-    final expiresAt = this.expiresAt;
-    return expiresAt != null && DateTime.now().isAfter(expiresAt);
-  }
-}
-''',
+      content: _authTokenEntity(context.config),
     ),
     GeneratedFile(
       path: p.join(domain, 'entities', 'auth_credentials_entity.dart'),
-      content: '''
-class AuthCredentialsEntity {
-  const AuthCredentialsEntity({
-    required this.username,
-    required this.password,
-  });
-
-  final String username;
-  final String password;
-}
-''',
+      content: _authCredentialsEntity(context.config),
     ),
     GeneratedFile(
       path: p.join(domain, 'repositories', 'auth_repository.dart'),
       content: '''
-import '../entities/auth_credentials_entity.dart';
+${_injectableImport(context)}import '../entities/auth_credentials_entity.dart';
 import '../entities/auth_token_entity.dart';
 
 abstract interface class AuthRepository {
@@ -77,11 +50,11 @@ abstract interface class AuthRepository {
 ''',
     ),
     _authUseCase(domain, 'login', '''
-import '../entities/auth_credentials_entity.dart';
+${_injectableImport(context)}import '../entities/auth_credentials_entity.dart';
 import '../entities/auth_token_entity.dart';
 import '../repositories/auth_repository.dart';
 
-class LoginUseCase {
+${_lazySingletonAnnotation(context)}class LoginUseCase {
   const LoginUseCase(this._repository);
 
   final AuthRepository _repository;
@@ -92,9 +65,9 @@ class LoginUseCase {
 }
 '''),
     _authUseCase(domain, 'logout', '''
-import '../repositories/auth_repository.dart';
+${_injectableImport(context)}import '../repositories/auth_repository.dart';
 
-class LogoutUseCase {
+${_lazySingletonAnnotation(context)}class LogoutUseCase {
   const LogoutUseCase(this._repository);
 
   final AuthRepository _repository;
@@ -105,10 +78,10 @@ class LogoutUseCase {
 }
 '''),
     _authUseCase(domain, 'save_auth_credentials', '''
-import '../entities/auth_credentials_entity.dart';
+${_injectableImport(context)}import '../entities/auth_credentials_entity.dart';
 import '../repositories/auth_repository.dart';
 
-class SaveAuthCredentialsUseCase {
+${_lazySingletonAnnotation(context)}class SaveAuthCredentialsUseCase {
   const SaveAuthCredentialsUseCase(this._repository);
 
   final AuthRepository _repository;
@@ -119,10 +92,10 @@ class SaveAuthCredentialsUseCase {
 }
 '''),
     _authUseCase(domain, 'get_auth_credentials', '''
-import '../entities/auth_credentials_entity.dart';
+${_injectableImport(context)}import '../entities/auth_credentials_entity.dart';
 import '../repositories/auth_repository.dart';
 
-class GetAuthCredentialsUseCase {
+${_lazySingletonAnnotation(context)}class GetAuthCredentialsUseCase {
   const GetAuthCredentialsUseCase(this._repository);
 
   final AuthRepository _repository;
@@ -133,9 +106,9 @@ class GetAuthCredentialsUseCase {
 }
 '''),
     _authUseCase(domain, 'clear_auth_credentials', '''
-import '../repositories/auth_repository.dart';
+${_injectableImport(context)}import '../repositories/auth_repository.dart';
 
-class ClearAuthCredentialsUseCase {
+${_lazySingletonAnnotation(context)}class ClearAuthCredentialsUseCase {
   const ClearAuthCredentialsUseCase(this._repository);
 
   final AuthRepository _repository;
@@ -185,8 +158,8 @@ extension AuthTokenDtoMapper on AuthTokenDto {
 ''',
     ),
     GeneratedFile(
-      path: p.join(data, 'remote', 'auth_remote_data_source.dart'),
-      content: _remoteSource(context.config),
+      path: p.join(data, 'remote', 'auth_api_service.dart'),
+      content: _remoteSource(context),
     ),
     GeneratedFile(
       path: p.join(data, 'local', 'models', '.gitkeep'),
@@ -199,38 +172,39 @@ extension AuthTokenDtoMapper on AuthTokenDto {
     GeneratedFile(
       path: p.join(data, 'repositories', 'auth_repository_impl.dart'),
       content: '''
-import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
+${_injectableImport(context)}import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
 import '${_domainImport(context, 'entities/auth_token_entity.dart')}';
 import '${_domainImport(context, 'repositories/auth_repository.dart')}';
 import '../mappers/auth_token_mapper.dart';
 import '../remote/models/login_request_dto.dart';
 import '../local/auth_local_data_source.dart';
-import '../remote/auth_remote_data_source.dart';
+import '../remote/auth_api_service.dart';
 
-class AuthRepositoryImpl implements AuthRepository {
+${_lazySingletonAnnotation(context)}class AuthRepositoryImpl implements AuthRepository {
   const AuthRepositoryImpl({
-    required AuthRemoteDataSource remoteDataSource,
+    required AuthApiService authApiService,
     required AuthLocalDataSource localDataSource,
-  })  : _remoteDataSource = remoteDataSource,
+  })  : _authApiService = authApiService,
         _localDataSource = localDataSource;
 
-  final AuthRemoteDataSource _remoteDataSource;
+  final AuthApiService _authApiService;
   final AuthLocalDataSource _localDataSource;
 
   @override
   Future<AuthTokenEntity> login(AuthCredentialsEntity credentials) async {
-    final response = await _remoteDataSource.login(
+    final response = await _authApiService.login(
       LoginRequestDto(
         username: credentials.username,
         password: credentials.password,
-      ),
+      ).toJson(),
     );
     return response.toEntity();
   }
 
   @override
   Future<void> logout() {
-    return _remoteDataSource.logout();
+    // TODO: Call logout endpoint when your API supports it.
+    return Future<void>.value();
   }
 
   @override
@@ -253,7 +227,96 @@ class AuthRepositoryImpl implements AuthRepository {
   ];
 }
 
+String _authTokenEntity(CleanArchitectConfig config) {
+  if (config.models.useFreezed) {
+    return '''
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'auth_token_entity.freezed.dart';
+
+@freezed
+class AuthTokenEntity with _\$AuthTokenEntity {
+  const factory AuthTokenEntity({
+    required String accessToken,
+    String? refreshToken,
+    DateTime? expiresAt,
+  }) = _AuthTokenEntity;
+}
+''';
+  }
+
+  return '''
+class AuthTokenEntity {
+  const AuthTokenEntity({
+    required this.accessToken,
+    this.refreshToken,
+    this.expiresAt,
+  });
+
+  final String accessToken;
+  final String? refreshToken;
+  final DateTime? expiresAt;
+
+  bool get isExpired {
+    final expiresAt = this.expiresAt;
+    return expiresAt != null && DateTime.now().isAfter(expiresAt);
+  }
+}
+''';
+}
+
+String _authCredentialsEntity(CleanArchitectConfig config) {
+  if (config.models.useFreezed) {
+    return '''
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'auth_credentials_entity.freezed.dart';
+
+@freezed
+class AuthCredentialsEntity with _\$AuthCredentialsEntity {
+  const factory AuthCredentialsEntity({
+    required String username,
+    required String password,
+  }) = _AuthCredentialsEntity;
+}
+''';
+  }
+
+  return '''
+class AuthCredentialsEntity {
+  const AuthCredentialsEntity({
+    required this.username,
+    required this.password,
+  });
+
+  final String username;
+  final String password;
+}
+''';
+}
+
 String _authTokenDto(CleanArchitectConfig config) {
+  if (config.models.useFreezed) {
+    return '''
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'auth_token_dto.freezed.dart';
+part 'auth_token_dto.g.dart';
+
+@freezed
+class AuthTokenDto with _\$AuthTokenDto {
+  const factory AuthTokenDto({
+    @JsonKey(name: 'access_token') required String accessToken,
+    @JsonKey(name: 'refresh_token') String? refreshToken,
+    @JsonKey(name: 'expires_at') DateTime? expiresAt,
+  }) = _AuthTokenDto;
+
+  factory AuthTokenDto.fromJson(Map<String, dynamic> json) =>
+      _\$AuthTokenDtoFromJson(json);
+}
+''';
+  }
+
   if (config.models.useJsonSerializable) {
     return '''
 import 'package:json_annotation/json_annotation.dart';
@@ -272,8 +335,11 @@ class AuthTokenDto {
     return _\$AuthTokenDtoFromJson(json);
   }
 
+  @JsonKey(name: 'access_token')
   final String accessToken;
+  @JsonKey(name: 'refresh_token')
   final String? refreshToken;
+  @JsonKey(name: 'expires_at')
   final DateTime? expiresAt;
 
   Map<String, dynamic> toJson() => _\$AuthTokenDtoToJson(this);
@@ -315,6 +381,26 @@ class AuthTokenDto {
 }
 
 String _loginRequestDto(CleanArchitectConfig config) {
+  if (config.models.useFreezed) {
+    return '''
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'login_request_dto.freezed.dart';
+part 'login_request_dto.g.dart';
+
+@freezed
+class LoginRequestDto with _\$LoginRequestDto {
+  const factory LoginRequestDto({
+    required String username,
+    required String password,
+  }) = _LoginRequestDto;
+
+  factory LoginRequestDto.fromJson(Map<String, dynamic> json) =>
+      _\$LoginRequestDtoFromJson(json);
+}
+''';
+  }
+
   if (config.models.useJsonSerializable) {
     return '''
 import 'package:json_annotation/json_annotation.dart';
@@ -360,44 +446,24 @@ class LoginRequestDto {
 ''';
 }
 
-String _remoteSource(CleanArchitectConfig config) {
-  final dioImport = config.network == NetworkClient.dio
-      ? "import 'package:dio/dio.dart';\n"
-      : '';
-  final field = config.network == NetworkClient.dio
-      ? '''
-  AuthRemoteDataSource(this._dio);
-
-  final Dio _dio;
-'''
-      : '''
-  const AuthRemoteDataSource();
-''';
-  final login = config.network == NetworkClient.dio
-      ? '''
-    final response = await _dio.post<Map<String, dynamic>>(
-      '/auth/login',
-      data: request.toJson(),
-    );
-    return AuthTokenDto.fromJson(response.data ?? <String, dynamic>{});
-'''
-      : '''
-    // TODO: Call your auth API.
-    throw UnimplementedError();
-''';
-
+String _remoteSource(TemplateContext context) {
   return '''
-${dioImport}import '../remote/models/auth_token_dto.dart';
-import '../remote/models/login_request_dto.dart';
+import 'package:dio/dio.dart';
+import 'package:injectable/injectable.dart';
+import 'package:retrofit/retrofit.dart';
 
-class AuthRemoteDataSource {
-$field
-  Future<AuthTokenDto> login(LoginRequestDto request) async {
-$login  }
+import 'models/auth_token_dto.dart';
 
-  Future<void> logout() async {
-    // TODO: Call logout endpoint when your API supports it.
-  }
+part 'auth_api_service.g.dart';
+
+@lazySingleton
+@RestApi(baseUrl: '')
+abstract class AuthApiService {
+  @factoryMethod
+  factory AuthApiService(@Named("auth_dio") Dio dio) = _AuthApiService;
+
+  @POST('/authorization/token/')
+  Future<AuthTokenDto> login(@Body() Map<String, dynamic> body);
 }
 ''';
 }
@@ -459,20 +525,27 @@ String _localSource(TemplateContext context) {
 ''';
 
   return '''
-${import}import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
+$import${_injectableImport(context)}import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
 
-class AuthLocalDataSource {
+${_lazySingletonAnnotation(context)}class AuthLocalDataSource {
 $constructor$body}
 ''';
 }
 
 GeneratedFile _di(TemplateContext context) {
+  if (context.config.dependencyInjection == DependencyInjection.injectable) {
+    return GeneratedFile(
+      path: p.join(context.paths.di, '.gitkeep'),
+      content: '',
+    );
+  }
+
   return GeneratedFile(
     path: p.join(context.paths.di, 'auth_di.dart'),
     content: '''
 import '${_dataImport(context, 'repositories/auth_repository_impl.dart')}';
 import '${_dataImport(context, 'local/auth_local_data_source.dart')}';
-import '${_dataImport(context, 'remote/auth_remote_data_source.dart')}';
+import '${_dataImport(context, 'remote/auth_api_service.dart')}';
 import '${_domainImport(context, 'repositories/auth_repository.dart')}';
 import '${_domainImport(context, 'usecases/clear_auth_credentials_use_case.dart')}';
 import '${_domainImport(context, 'usecases/get_auth_credentials_use_case.dart')}';
@@ -499,11 +572,11 @@ class AuthDependencies {
 }
 
 AuthDependencies buildAuthDependencies({
-  required AuthRemoteDataSource remoteDataSource,
+  required AuthApiService authApiService,
   required AuthLocalDataSource localDataSource,
 }) {
   final repository = AuthRepositoryImpl(
-    remoteDataSource: remoteDataSource,
+    authApiService: authApiService,
     localDataSource: localDataSource,
   );
 
@@ -530,7 +603,7 @@ List<GeneratedFile> _presentation(TemplateContext context) {
     ),
     GeneratedFile(
       path: p.join(presentation, 'pages', 'login_page.dart'),
-      content: _loginPage(context.config),
+      content: _loginPage(context),
     ),
     GeneratedFile(
       path: p.join(presentation, 'widgets', 'login_view_item.dart'),
@@ -636,16 +709,32 @@ class AuthController {
 ''';
 }
 
-String _loginPage(CleanArchitectConfig config) {
+String _loginPage(TemplateContext context) {
+  final config = context.config;
   if (config.stateManagement == StateManagement.getx) {
     return '''
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import 'auth_controller.dart';
+import '${_domainImport(context, 'usecases/login_use_case.dart')}';
+import '../controllers/auth_controller.dart';
 
-class LoginPage extends GetView<AuthController> {
+class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
+
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  late final AuthController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    Get.put(AuthController(Get.find<LoginUseCase>()));
+    controller = Get.find<AuthController>();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -727,4 +816,16 @@ String _packageImport(String basePath, String path) {
   final packageName = parts[libIndex - 1];
   final libPath = p.url.joinAll(parts.skip(libIndex + 1).followedBy([path]));
   return 'package:$packageName/$libPath';
+}
+
+String _injectableImport(TemplateContext context) {
+  return context.config.dependencyInjection == DependencyInjection.injectable
+      ? "import 'package:injectable/injectable.dart';\n"
+      : '';
+}
+
+String _lazySingletonAnnotation(TemplateContext context) {
+  return context.config.dependencyInjection == DependencyInjection.injectable
+      ? '@lazySingleton\n'
+      : '';
 }

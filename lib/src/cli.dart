@@ -65,6 +65,12 @@ class CleanArchitectCli {
         ..addOption('state', allowed: ['getx', 'none'])
         ..addOption('network', allowed: ['dio', 'abstract'])
         ..addOption('storage', allowed: ['secure_storage', 'abstract'])
+        ..addOption(
+          'dependency-injection',
+          abbr: 'd',
+          allowed: ['manual', 'injectable'],
+        )
+        ..addOption('di', allowed: ['manual', 'injectable'])
         ..addOption('feature'),
     );
 
@@ -169,7 +175,11 @@ class CleanArchitectCli {
           _networkOverride(results['network'] as String?) ?? config.network,
       localStorage: _storageOverride(results['storage'] as String?) ??
           config.localStorage,
-      dependencyInjection: config.dependencyInjection,
+      dependencyInjection: _dependencyInjectionOverride(
+            results['dependency-injection'] as String? ??
+                results['di'] as String?,
+          ) ??
+          config.dependencyInjection,
       models: config.models,
       paths: config.paths,
     );
@@ -195,6 +205,14 @@ class CleanArchitectCli {
     return switch (value) {
       'secure_storage' => LocalStorage.secureStorage,
       'abstract' => LocalStorage.abstract,
+      _ => null,
+    };
+  }
+
+  DependencyInjection? _dependencyInjectionOverride(String? value) {
+    return switch (value) {
+      'manual' => DependencyInjection.manual,
+      'injectable' => DependencyInjection.injectable,
       _ => null,
     };
   }

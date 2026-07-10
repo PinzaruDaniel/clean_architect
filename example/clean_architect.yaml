@@ -3,10 +3,10 @@ clean_architect:
   state_management: getx # getx or none
   network: dio # dio or abstract
   local_storage: secure_storage # secure_storage or abstract
-  dependency_injection: di # manual or di
+  dependency_injection: manual # manual or injectable
   models:
-    use_freezed: false
-    use_json_serializable: false
+    use_freezed: true
+    use_json_serializable: true
   paths:
     domain: domain/lib
     data: data/lib/features

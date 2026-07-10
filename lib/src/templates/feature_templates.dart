@@ -10,15 +10,7 @@ List<GeneratedFile> featureTemplates(TemplateContext context) {
     GeneratedFile(
       path: p.join(
           context.paths.domain, 'entities', '${feature.snake}_entity.dart'),
-      content: '''
-class ${feature.pascal}Entity {
-  const ${feature.pascal}Entity({
-    required this.id,
-  });
-
-  final String id;
-}
-''',
+      content: _entity(context),
     ),
     GeneratedFile(
       path: p.join(
@@ -27,7 +19,7 @@ class ${feature.pascal}Entity {
         '${feature.snake}_repository.dart',
       ),
       content: '''
-import '../entities/${feature.snake}_entity.dart';
+${_injectableImport(context)}import '../entities/${feature.snake}_entity.dart';
 
 abstract interface class ${feature.pascal}Repository {
   Future<List<${feature.pascal}Entity>> get${feature.pascal}List();
@@ -41,10 +33,10 @@ abstract interface class ${feature.pascal}Repository {
         'get_${feature.snake}_list_use_case.dart',
       ),
       content: '''
-import '../entities/${feature.snake}_entity.dart';
+${_injectableImport(context)}import '../entities/${feature.snake}_entity.dart';
 import '../repositories/${feature.snake}_repository.dart';
 
-class Get${feature.pascal}ListUseCase {
+${_lazySingletonAnnotation(context)}class Get${feature.pascal}ListUseCase {
   const Get${feature.pascal}ListUseCase(this._repository);
 
   final ${feature.pascal}Repository _repository;
@@ -69,9 +61,9 @@ class Get${feature.pascal}ListUseCase {
       path: p.join(
         context.paths.data,
         'remote',
-        '${feature.snake}_remote_data_source.dart',
+        '${feature.snake}_api_service.dart',
       ),
-      content: _remoteSource(context),
+      content: _apiService(context),
     ),
     GeneratedFile(
       path: p.join(context.paths.data, 'local', 'models', '.gitkeep'),
@@ -111,8 +103,55 @@ class ${feature.pascal}LocalDataSource {
   return files;
 }
 
+String _entity(TemplateContext context) {
+  final feature = context.cases;
+  if (context.config.models.useFreezed) {
+    return '''
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part '${feature.snake}_entity.freezed.dart';
+
+@freezed
+class ${feature.pascal}Entity with _\$${feature.pascal}Entity {
+  const factory ${feature.pascal}Entity({
+    required String id,
+  }) = _${feature.pascal}Entity;
+}
+''';
+  }
+
+  return '''
+class ${feature.pascal}Entity {
+  const ${feature.pascal}Entity({
+    required this.id,
+  });
+
+  final String id;
+}
+''';
+}
+
 String _dto(TemplateContext context) {
   final feature = context.cases;
+  if (context.config.models.useFreezed) {
+    return '''
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part '${feature.snake}_dto.freezed.dart';
+part '${feature.snake}_dto.g.dart';
+
+@freezed
+class ${feature.pascal}Dto with _\$${feature.pascal}Dto {
+  const factory ${feature.pascal}Dto({
+    required String id,
+  }) = _${feature.pascal}Dto;
+
+  factory ${feature.pascal}Dto.fromJson(Map<String, dynamic> json) =>
+      _\$${feature.pascal}DtoFromJson(json);
+}
+''';
+  }
+
   if (context.config.models.useJsonSerializable) {
     return '''
 import 'package:json_annotation/json_annotation.dart';
@@ -163,7 +202,7 @@ String _mapper(TemplateContext context) {
   );
 
   return '''
-import '$entityImport';
+${_injectableImport(context)}import '$entityImport';
 import '../remote/models/${feature.snake}_dto.dart';
 
 extension ${feature.pascal}DtoMapper on ${feature.pascal}Dto {
@@ -174,40 +213,25 @@ extension ${feature.pascal}DtoMapper on ${feature.pascal}Dto {
 ''';
 }
 
-String _remoteSource(TemplateContext context) {
+String _apiService(TemplateContext context) {
   final feature = context.cases;
-  final dioImport = context.config.network == NetworkClient.dio
-      ? "import 'package:dio/dio.dart';\n"
-      : '';
-  final constructor = context.config.network == NetworkClient.dio
-      ? '''
-  ${feature.pascal}RemoteDataSource(this._dio);
-
-  final Dio _dio;
-'''
-      : '''
-  const ${feature.pascal}RemoteDataSource();
-''';
-  final fetch = context.config.network == NetworkClient.dio
-      ? '''
-    final response = await _dio.get<List<dynamic>>('/${feature.snake}');
-    return (response.data ?? const [])
-        .cast<Map<String, dynamic>>()
-        .map(${feature.pascal}Dto.fromJson)
-        .toList(growable: false);
-'''
-      : '''
-    // TODO: Fetch ${feature.title.toLowerCase()} items from your API.
-    return const [];
-''';
-
   return '''
-${dioImport}import '../remote/models/${feature.snake}_dto.dart';
+import 'package:dio/dio.dart';
+import 'package:injectable/injectable.dart';
+import 'package:retrofit/retrofit.dart';
 
-class ${feature.pascal}RemoteDataSource {
-$constructor
-  Future<List<${feature.pascal}Dto>> getItems() async {
-$fetch  }
+import 'models/${feature.snake}_dto.dart';
+
+part '${feature.snake}_api_service.g.dart';
+
+@lazySingleton
+@RestApi(baseUrl: '')
+abstract class ${feature.pascal}ApiService {
+  @factoryMethod
+  factory ${feature.pascal}ApiService(@Named("main_dio") Dio dio) = _${feature.pascal}ApiService;
+
+  @GET('/${feature.snake}')
+  Future<List<${feature.pascal}Dto>> getItems();
 }
 ''';
 }
@@ -224,25 +248,25 @@ String _repositoryImpl(TemplateContext context) {
   );
 
   return '''
-import '$entityImport';
+${_injectableImport(context)}import '$entityImport';
 import '$repositoryImport';
 import '../mappers/${feature.snake}_mapper.dart';
 import '../local/${feature.snake}_local_data_source.dart';
-import '../remote/${feature.snake}_remote_data_source.dart';
+import '../remote/${feature.snake}_api_service.dart';
 
-class ${feature.pascal}RepositoryImpl implements ${feature.pascal}Repository {
+${_lazySingletonAnnotation(context)}class ${feature.pascal}RepositoryImpl implements ${feature.pascal}Repository {
   const ${feature.pascal}RepositoryImpl({
-    required ${feature.pascal}RemoteDataSource remoteDataSource,
+    required ${feature.pascal}ApiService apiService,
     required ${feature.pascal}LocalDataSource localDataSource,
-  })  : _remoteDataSource = remoteDataSource,
+  })  : _apiService = apiService,
         _localDataSource = localDataSource;
 
-  final ${feature.pascal}RemoteDataSource _remoteDataSource;
+  final ${feature.pascal}ApiService _apiService;
   final ${feature.pascal}LocalDataSource _localDataSource;
 
   @override
   Future<List<${feature.pascal}Entity>> get${feature.pascal}List() async {
-    final items = await _remoteDataSource.getItems();
+    final items = await _apiService.getItems();
     await _localDataSource.cacheItems(items);
     return items.map((item) => item.toEntity()).toList(growable: false);
   }
@@ -252,13 +276,19 @@ class ${feature.pascal}RepositoryImpl implements ${feature.pascal}Repository {
 
 GeneratedFile _di(TemplateContext context) {
   final feature = context.cases;
+  if (context.config.dependencyInjection == DependencyInjection.injectable) {
+    return GeneratedFile(
+      path: p.join(context.paths.di, '.gitkeep'),
+      content: '',
+    );
+  }
 
   return GeneratedFile(
     path: p.join(context.paths.di, '${feature.snake}_di.dart'),
     content: '''
 import '${_dataImport(context, 'repositories/${feature.snake}_repository_impl.dart')}';
 import '${_dataImport(context, 'local/${feature.snake}_local_data_source.dart')}';
-import '${_dataImport(context, 'remote/${feature.snake}_remote_data_source.dart')}';
+import '${_dataImport(context, 'remote/${feature.snake}_api_service.dart')}';
 import '${_domainImport(context, 'repositories/${feature.snake}_repository.dart')}';
 import '${_domainImport(context, 'usecases/get_${feature.snake}_list_use_case.dart')}';
 
@@ -273,11 +303,11 @@ class ${feature.pascal}Dependencies {
 }
 
 ${feature.pascal}Dependencies build${feature.pascal}Dependencies({
-  required ${feature.pascal}RemoteDataSource remoteDataSource,
+  required ${feature.pascal}ApiService apiService,
   required ${feature.pascal}LocalDataSource localDataSource,
 }) {
   final repository = ${feature.pascal}RepositoryImpl(
-    remoteDataSource: remoteDataSource,
+    apiService: apiService,
     localDataSource: localDataSource,
   );
 
@@ -356,10 +386,26 @@ String _page(TemplateContext context) {
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '${_domainPresentationImport(context, 'usecases/get_${feature.snake}_list_use_case.dart')}';
 import '../controllers/${feature.snake}_controller.dart';
 
-class ${feature.pascal}Page extends GetView<${feature.pascal}Controller> {
+class ${feature.pascal}Page extends StatefulWidget {
   const ${feature.pascal}Page({super.key});
+
+  @override
+  State<${feature.pascal}Page> createState() => _${feature.pascal}PageState();
+}
+
+class _${feature.pascal}PageState extends State<${feature.pascal}Page> {
+  late final ${feature.pascal}Controller controller;
+
+  @override
+  void initState() {
+    super.initState();
+    Get.put(${feature.pascal}Controller(Get.find<Get${feature.pascal}ListUseCase>()));
+    controller = Get.find<${feature.pascal}Controller>();
+    controller.load();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -409,4 +455,16 @@ String _packageImport(String basePath, String path) {
   final packageName = parts[libIndex - 1];
   final libPath = p.url.joinAll(parts.skip(libIndex + 1).followedBy([path]));
   return 'package:$packageName/$libPath';
+}
+
+String _injectableImport(TemplateContext context) {
+  return context.config.dependencyInjection == DependencyInjection.injectable
+      ? "import 'package:injectable/injectable.dart';\n"
+      : '';
+}
+
+String _lazySingletonAnnotation(TemplateContext context) {
+  return context.config.dependencyInjection == DependencyInjection.injectable
+      ? '@lazySingleton\n'
+      : '';
 }
