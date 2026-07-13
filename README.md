@@ -42,6 +42,9 @@ clean_architect create auth
 clean_architect create feature <name>
 clean_architect create usecase <name> --feature <feature>
 clean_architect create repository <feature>
+clean_architect create remote-function <name> --feature <feature>
+clean_architect create local-function <name> --feature <feature>
+clean_architect create cached-function <name> --feature <feature>
 ```
 
 Examples:
@@ -53,6 +56,9 @@ clean_architect create feature orders
 clean_architect create auth
 clean_architect create usecase login --feature auth
 clean_architect create repository auth
+clean_architect create remote-function loadDetails --feature orders
+clean_architect create local-function readDraft --feature orders
+clean_architect create cached-function syncDetails --feature orders
 clean_architect doctor
 ```
 
@@ -76,6 +82,8 @@ clean_architect create auth --storage secure_storage
 clean_architect create auth --storage abstract
 clean_architect create auth --di injectable
 clean_architect create auth --dependency-injection manual
+clean_architect create feature orders --use-either-failure
+clean_architect create feature orders --no-use-either-failure
 ```
 
 `--overwrite` and `--force` are required before existing generated files are replaced.
@@ -98,6 +106,7 @@ clean_architect:
   local_storage: secure_storage # secure_storage or abstract
   dependency_injection: manual # manual or injectable
   use_asset_generator: true
+  use_either_failure: false
   models:
     use_freezed: true
     use_json_serializable: true
@@ -118,6 +127,7 @@ clean_architect:
 | `local_storage` | `secure_storage`, `abstract` | `secure_storage` | Local auth credential storage style. |
 | `dependency_injection` | `manual`, `injectable` | `manual` | Manual DI builder files or injectable/get_it setup files and annotations. |
 | `use_asset_generator` | `true`, `false` | `true` | Whether presentation gets `asset_generator_kit.yaml` and the asset generator dependency. |
+| `use_either_failure` | `true`, `false` | `false` | Whether generated repositories, repository implementations, and use cases return `Future<Either<Failure, T>>`. |
 | `models.use_freezed` | `true`, `false` | `true` | Whether entities/DTOs use Freezed. |
 | `models.use_json_serializable` | `true`, `false` | `true` | Whether DTOs include JSON serialization parts/factories. |
 | `paths.domain` | path | `domain/lib` | Domain layer feature root. |
@@ -360,6 +370,77 @@ abstract class AuthApiService {
 
 The generated auth controller uses `GetIt.instance.get<LoginUseCase>()`, and the GetX page registers the controller in `initState` with `Get.put(AuthController())`.
 
+## Operation Commands
+
+Operation commands add a new function to an existing feature. They generate the required entity/model/usecase support files and patch the existing source, repository, repository implementation, and controller files.
+
+### Remote Function
+
+```sh
+clean_architect create remote-function loadDetails --feature orders
+```
+
+Aliases: `remote-function`, `remote-method`.
+
+Adds:
+
+```txt
+domain/lib/features/orders/entities/load_details_entity.dart
+domain/lib/features/orders/usecases/load_details_use_case.dart
+data/lib/features/orders/remote/models/load_details_dto.dart
+data/lib/features/orders/mappers/load_details_mapper.dart
+```
+
+Patches:
+
+```txt
+data/lib/features/orders/remote/orders_api_service.dart
+domain/lib/features/orders/repositories/orders_repository.dart
+data/lib/features/orders/repositories/orders_repository_impl.dart
+presentation/lib/controllers/orders_controller.dart
+```
+
+### Local Function
+
+```sh
+clean_architect create local-function readDraft --feature orders
+```
+
+Aliases: `local-function`, `local-method`.
+
+Adds:
+
+```txt
+domain/lib/features/orders/entities/read_draft_entity.dart
+domain/lib/features/orders/usecases/read_draft_use_case.dart
+data/lib/features/orders/local/boxes/read_draft_box.dart
+data/lib/features/orders/mappers/read_draft_mapper.dart
+```
+
+Patches the local source, repository contract, repository implementation, and controller.
+
+### Cached Function
+
+```sh
+clean_architect create cached-function syncDetails --feature orders
+```
+
+Aliases: `cached-function`, `cached-method`.
+
+Adds remote and local support together:
+
+```txt
+domain/lib/features/orders/entities/sync_details_entity.dart
+domain/lib/features/orders/usecases/sync_details_remote_use_case.dart
+domain/lib/features/orders/usecases/sync_details_cache_use_case.dart
+data/lib/features/orders/remote/models/sync_details_dto.dart
+data/lib/features/orders/local/boxes/sync_details_box.dart
+data/lib/features/orders/mappers/sync_details_mapper.dart
+data/lib/features/orders/mappers/sync_details_box_mapper.dart
+```
+
+Patches remote source, local source, repository contract, repository implementation, and adds two controller functions: one for remote and one for cache.
+
 ## Dependency Injection Modes
 
 ### Manual
@@ -392,6 +473,26 @@ di/lib/di.dart
 ```
 
 Generated classes receive injectable annotations where supported. After generation, run build runner in the generated packages that contain injectable/freezed/json_serializable code.
+
+## Either / Failure Return Type
+
+```yaml
+use_either_failure: true
+```
+
+When enabled, generated repository contracts, repository implementations, and use cases use:
+
+```dart
+Future<Either<Failure, T>>
+```
+
+instead of:
+
+```dart
+Future<T>
+```
+
+The generator also creates `domain/lib/failures/failure.dart` where needed and adds `dartz` to generated layer pubspecs. You can override the value for one command with `--use-either-failure` or `--no-use-either-failure`.
 
 ## Model Modes
 

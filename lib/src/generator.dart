@@ -8,6 +8,7 @@ import 'templates/auth_templates.dart';
 import 'templates/feature_templates.dart';
 import 'templates/package_templates.dart';
 import 'templates/architecture_templates.dart';
+import 'templates/operation_templates.dart';
 
 class CleanArchitectGenerator {
   CleanArchitectGenerator(this.config) : _paths = PathResolver(config);
@@ -64,6 +65,28 @@ class CleanArchitectGenerator {
       ...packageTemplates(context, includePresentation: !skipPresentation),
       ...featureTemplates(context),
     ];
+  }
+
+  List<GeneratedFile> operation(
+    String name, {
+    required String feature,
+    required OperationKind kind,
+  }) {
+    final featureCases = NameCases(feature);
+    final operationCases = NameCases(name);
+    final paths = _paths.resolve(featureCases.snake);
+    final context = TemplateContext(
+      config: config,
+      cases: featureCases,
+      paths: paths,
+      skipPresentation: false,
+    );
+
+    return operationTemplates(
+      context,
+      operation: operationCases,
+      kind: kind,
+    );
   }
 
   List<GeneratedFile> useCase(String name, {required String feature}) {

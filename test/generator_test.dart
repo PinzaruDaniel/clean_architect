@@ -1,5 +1,6 @@
 import 'package:clean_architect/src/config.dart';
 import 'package:clean_architect/src/generator.dart';
+import 'package:clean_architect/src/templates/operation_templates.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -131,6 +132,7 @@ void main() {
       localStorage: LocalStorage.abstract,
       dependencyInjection: DependencyInjection.manual,
       useAssetGenerator: true,
+      useEitherFailure: false,
       models: ModelConfig(
         useFreezed: true,
         useJsonSerializable: true,
@@ -169,6 +171,7 @@ void main() {
       localStorage: LocalStorage.secureStorage,
       dependencyInjection: DependencyInjection.injectable,
       useAssetGenerator: true,
+      useEitherFailure: false,
       models: ModelConfig(
         useFreezed: true,
         useJsonSerializable: true,
@@ -193,5 +196,94 @@ void main() {
       (file) => file.path.endsWith('auth_repository_impl.dart'),
     );
     expect(repository.content, contains('@lazySingleton'));
+  });
+  test('remote operation generates dto entity mapper and either usecase', () {
+    const config = CleanArchitectConfig(
+      structure: ProjectStructure.layeredPackages,
+      stateManagement: StateManagement.getx,
+      network: NetworkClient.dio,
+      localStorage: LocalStorage.secureStorage,
+      dependencyInjection: DependencyInjection.manual,
+      useAssetGenerator: true,
+      useEitherFailure: true,
+      models: ModelConfig(
+        useFreezed: true,
+        useJsonSerializable: true,
+      ),
+      paths: PathConfig(
+        domain: 'domain/lib',
+        data: 'data/lib/features',
+        presentation: 'presentation/lib',
+        di: 'di/lib',
+      ),
+    );
+
+    final files = CleanArchitectGenerator(config).operation(
+      'loadDetails',
+      feature: 'orders',
+      kind: OperationKind.remote,
+    );
+    final paths = files.map((file) => file.path).toSet();
+
+    expect(paths, contains('domain/lib/failures/failure.dart'));
+    expect(
+        paths,
+        contains(
+            'domain/lib/features/orders/entities/load_details_entity.dart'));
+    expect(
+        paths,
+        contains(
+            'data/lib/features/orders/remote/models/load_details_dto.dart'));
+    expect(
+        paths,
+        contains(
+            'domain/lib/features/orders/usecases/load_details_use_case.dart'));
+
+    final useCase = files.singleWhere(
+      (file) => file.path.endsWith('load_details_use_case.dart'),
+    );
+    expect(useCase.content,
+        contains('Future<Either<Failure, LoadDetailsEntity>> call()'));
+  });
+
+  test('feature templates use Either Failure when configured', () {
+    const config = CleanArchitectConfig(
+      structure: ProjectStructure.layeredPackages,
+      stateManagement: StateManagement.getx,
+      network: NetworkClient.dio,
+      localStorage: LocalStorage.secureStorage,
+      dependencyInjection: DependencyInjection.manual,
+      useAssetGenerator: true,
+      useEitherFailure: true,
+      models: ModelConfig(
+        useFreezed: true,
+        useJsonSerializable: true,
+      ),
+      paths: PathConfig(
+        domain: 'domain/lib',
+        data: 'data/lib/features',
+        presentation: 'presentation/lib',
+        di: 'di/lib',
+      ),
+    );
+
+    final files = CleanArchitectGenerator(config).feature('orders');
+    final repository = files.singleWhere(
+      (file) => file.path.endsWith('orders_repository.dart'),
+    );
+    final repositoryImpl = files.singleWhere(
+      (file) => file.path.endsWith('orders_repository_impl.dart'),
+    );
+    final useCase = files.singleWhere(
+      (file) => file.path.endsWith('get_orders_list_use_case.dart'),
+    );
+
+    expect(repository.content,
+        contains('Future<Either<Failure, List<OrdersEntity>>>'));
+    expect(repositoryImpl.content, contains('return right('));
+    expect(repositoryImpl.content,
+        contains('return left(Failure(error.toString()))'));
+    expect(useCase.content,
+        contains('Future<Either<Failure, List<OrdersEntity>>> call()'));
   });
 }

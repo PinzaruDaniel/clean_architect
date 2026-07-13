@@ -7,6 +7,7 @@ import '../generator.dart';
 List<GeneratedFile> featureTemplates(TemplateContext context) {
   final feature = context.cases;
   final files = <GeneratedFile>[
+    if (context.config.useEitherFailure) _failure(context),
     GeneratedFile(
       path: p.join(
           context.paths.domain, 'entities', '${feature.snake}_entity.dart'),
@@ -18,13 +19,7 @@ List<GeneratedFile> featureTemplates(TemplateContext context) {
         'repositories',
         '${feature.snake}_repository.dart',
       ),
-      content: '''
-${_injectableImport(context)}import '../entities/${feature.snake}_entity.dart';
-
-abstract interface class ${feature.pascal}Repository {
-  Future<List<${feature.pascal}Entity>> get${feature.pascal}List();
-}
-''',
+      content: _repository(context),
     ),
     GeneratedFile(
       path: p.join(
@@ -32,20 +27,7 @@ abstract interface class ${feature.pascal}Repository {
         'usecases',
         'get_${feature.snake}_list_use_case.dart',
       ),
-      content: '''
-${_injectableImport(context)}import '../entities/${feature.snake}_entity.dart';
-import '../repositories/${feature.snake}_repository.dart';
-
-${_lazySingletonAnnotation(context)}class Get${feature.pascal}ListUseCase {
-  const Get${feature.pascal}ListUseCase(this._repository);
-
-  final ${feature.pascal}Repository _repository;
-
-  Future<List<${feature.pascal}Entity>> call() {
-    return _repository.get${feature.pascal}List();
-  }
-}
-''',
+      content: _useCase(context),
     ),
     GeneratedFile(
       path: p.join(
@@ -109,6 +91,57 @@ class ${feature.pascal}LocalDataSourceImpl implements ${feature.pascal}LocalData
   }
 
   return files;
+}
+
+GeneratedFile _failure(TemplateContext context) {
+  return GeneratedFile(
+    path: p.join(
+        _packageRoot(context.paths.domain), 'lib', 'failures', 'failure.dart'),
+    content: '''
+class Failure {
+  const Failure(this.message);
+
+  final String message;
+}
+''',
+  );
+}
+
+String _repository(TemplateContext context) {
+  final feature = context.cases;
+  final eitherImport = context.config.useEitherFailure
+      ? "import 'package:dartz/dartz.dart';\n\nimport '../failures/failure.dart';\n"
+      : '';
+
+  return '''
+${_injectableImport(context)}${eitherImport}import '../entities/${feature.snake}_entity.dart';
+
+abstract interface class ${feature.pascal}Repository {
+  ${_returnType(context, 'List<${feature.pascal}Entity>')} get${feature.pascal}List();
+}
+''';
+}
+
+String _useCase(TemplateContext context) {
+  final feature = context.cases;
+  final eitherImport = context.config.useEitherFailure
+      ? "import 'package:dartz/dartz.dart';\n\nimport '../failures/failure.dart';\n"
+      : '';
+
+  return '''
+${_injectableImport(context)}${eitherImport}import '../entities/${feature.snake}_entity.dart';
+import '../repositories/${feature.snake}_repository.dart';
+
+${_lazySingletonAnnotation(context)}class Get${feature.pascal}ListUseCase {
+  const Get${feature.pascal}ListUseCase(this._repository);
+
+  final ${feature.pascal}Repository _repository;
+
+  ${_returnType(context, 'List<${feature.pascal}Entity>')} call() {
+    return _repository.get${feature.pascal}List();
+  }
+}
+''';
 }
 
 String _entity(TemplateContext context) {
@@ -255,8 +288,23 @@ String _repositoryImpl(TemplateContext context) {
     'repositories/${feature.snake}_repository.dart',
   );
 
+  final eitherImport = context.config.useEitherFailure
+      ? "import 'package:dartz/dartz.dart';\nimport '${_domainImport(context, 'failures/failure.dart')}';\n"
+      : '';
+  final body = context.config.useEitherFailure
+      ? '''try {
+      final items = await _apiService.getItems();
+      await _localDataSource.cacheItems(items);
+      return right(items.map((item) => item.toEntity()).toList(growable: false));
+    } catch (error) {
+      return left(Failure(error.toString()));
+    }'''
+      : '''final items = await _apiService.getItems();
+    await _localDataSource.cacheItems(items);
+    return items.map((item) => item.toEntity()).toList(growable: false);''';
+
   return '''
-${_injectableImport(context)}import '$entityImport';
+${_injectableImport(context)}${eitherImport}import '$entityImport';
 import '$repositoryImport';
 import '../mappers/${feature.snake}_mapper.dart';
 import '../local/${feature.snake}_local_data_source.dart';
@@ -273,10 +321,8 @@ ${_lazySingletonAnnotation(context)}class ${feature.pascal}RepositoryImpl implem
   final ${feature.pascal}LocalDataSource _localDataSource;
 
   @override
-  Future<List<${feature.pascal}Entity>> get${feature.pascal}List() async {
-    final items = await _apiService.getItems();
-    await _localDataSource.cacheItems(items);
-    return items.map((item) => item.toEntity()).toList(growable: false);
+  ${_returnType(context, 'List<${feature.pascal}Entity>')} get${feature.pascal}List() async {
+    $body
   }
 }
 ''';
@@ -442,6 +488,20 @@ class ${feature.pascal}Page extends StatelessWidget {
   }
 }
 ''';
+}
+
+String _returnType(TemplateContext context, String valueType) {
+  if (context.config.useEitherFailure) {
+    return 'Future<Either<Failure, $valueType>>';
+  }
+  return 'Future<$valueType>';
+}
+
+String _packageRoot(String libPath) {
+  final parts = p.split(p.normalize(libPath));
+  final libIndex = parts.indexOf('lib');
+  if (libIndex == -1) return libPath;
+  return p.joinAll(parts.take(libIndex));
 }
 
 String _domainImport(TemplateContext context, String path) {

@@ -1,3 +1,8 @@
+## 0.1.8
+
+- Added remote/local/cached operation commands for extending existing features.
+- Added `use_either_failure` configuration for `Future<Either<Failure, T>>` repository and use case return types.
+
 ## 0.1.7
 
 - updated example/clean_architect.yaml and added build runner package for presentation

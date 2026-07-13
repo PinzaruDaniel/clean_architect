@@ -20,6 +20,7 @@ void main() {
       localStorage: LocalStorage.abstract,
       dependencyInjection: DependencyInjection.manual,
       useAssetGenerator: true,
+      useEitherFailure: false,
       models: ModelConfig(
         useFreezed: false,
         useJsonSerializable: false,

@@ -14,16 +14,16 @@ enum LocalStorage { secureStorage, sharedPreferences, abstract }
 enum DependencyInjection { manual, injectable }
 
 class CleanArchitectConfig {
-  const CleanArchitectConfig({
-    required this.structure,
-    required this.stateManagement,
-    required this.network,
-    required this.localStorage,
-    required this.dependencyInjection,
-    required this.models,
-    required this.paths,
-    required this.useAssetGenerator
-  });
+  const CleanArchitectConfig(
+      {required this.structure,
+      required this.stateManagement,
+      required this.network,
+      required this.localStorage,
+      required this.dependencyInjection,
+      required this.models,
+      required this.paths,
+      required this.useAssetGenerator,
+      required this.useEitherFailure});
 
   factory CleanArchitectConfig.defaults() {
     return const CleanArchitectConfig(
@@ -33,6 +33,7 @@ class CleanArchitectConfig {
       localStorage: LocalStorage.secureStorage,
       dependencyInjection: DependencyInjection.manual,
       useAssetGenerator: true,
+      useEitherFailure: false,
       models: ModelConfig(
         useFreezed: true,
         useJsonSerializable: true,
@@ -98,7 +99,16 @@ class CleanArchitectConfig {
         _diName,
         defaults.dependencyInjection,
       ),
-      useAssetGenerator: root['use_asset_generator'],
+      useAssetGenerator: _boolValue(
+        root,
+        'use_asset_generator',
+        defaults.useAssetGenerator,
+      ),
+      useEitherFailure: _boolValue(
+        root,
+        'use_either_failure',
+        defaults.useEitherFailure,
+      ),
       models: ModelConfig(
         useFreezed:
             _boolValue(models, 'use_freezed', defaults.models.useFreezed),
@@ -129,6 +139,7 @@ class CleanArchitectConfig {
   final ModelConfig models;
   final PathConfig paths;
   final bool useAssetGenerator;
+  final bool useEitherFailure;
 
   static const fileName = 'clean_architect.yaml';
 
@@ -141,6 +152,7 @@ clean_architect:
   local_storage: secure_storage # secure_storage or abstract
   dependency_injection: manual # manual or injectable
   use_asset_generator: true
+  use_either_failure: false
   models:
     use_freezed: true
     use_json_serializable: true

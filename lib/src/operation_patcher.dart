@@ -1,0 +1,457 @@
+import 'dart:io';
+
+import 'package:mason_logger/mason_logger.dart';
+import 'package:path/path.dart' as p;
+
+import 'case_utils.dart';
+import 'config.dart';
+import 'path_resolver.dart';
+import 'templates/operation_templates.dart';
+
+class OperationPatcher {
+  const OperationPatcher({
+    required this.config,
+    required this.logger,
+    required this.dryRun,
+  });
+
+  final CleanArchitectConfig config;
+  final Logger logger;
+  final bool dryRun;
+
+  void apply({
+    required OperationKind kind,
+    required String featureName,
+    required String operationName,
+  }) {
+    final feature = NameCases(featureName);
+    final operation = NameCases(operationName);
+    final paths = PathResolver(config).resolve(feature.snake);
+
+    if (kind.includesRemote) {
+      _patchRemoteSource(paths.data, feature, operation);
+    }
+    if (kind.includesLocal) {
+      _patchLocalSource(paths.data, feature, operation, kind);
+    }
+
+    _patchRepository(paths.domain, feature, operation, kind);
+    _patchRepositoryImpl(paths.data, paths.domain, feature, operation, kind);
+    _patchController(
+        paths.presentation, paths.domain, feature, operation, kind);
+  }
+
+  void _patchRemoteSource(
+      String dataPath, NameCases feature, NameCases operation) {
+    final path =
+        p.join(dataPath, 'remote', '${feature.snake}_api_service.dart');
+    final importLine = "import 'models/${operation.snake}_dto.dart';";
+    final snippet = '''
+
+  @GET('/${feature.snake}/${operation.snake}')
+  Future<${operation.pascal}Dto> ${operation.camel}();
+''';
+    _patchClassFile(
+      path: path,
+      createContent: '''
+import 'package:dio/dio.dart';
+import 'package:injectable/injectable.dart';
+import 'package:retrofit/retrofit.dart';
+
+$importLine
+
+part '${feature.snake}_api_service.g.dart';
+
+@lazySingleton
+@RestApi(baseUrl: '')
+abstract class ${feature.pascal}ApiService {
+  @factoryMethod
+  factory ${feature.pascal}ApiService(@Named("main_dio") Dio dio) = _${feature.pascal}ApiService;$snippet}
+''',
+      imports: [importLine],
+      duplicateNeedle: 'Future<${operation.pascal}Dto> ${operation.camel}()',
+      snippet: snippet,
+    );
+  }
+
+  void _patchLocalSource(
+    String dataPath,
+    NameCases feature,
+    NameCases operation,
+    OperationKind kind,
+  ) {
+    final path =
+        p.join(dataPath, 'local', '${feature.snake}_local_data_source.dart');
+    final importLine = "import 'boxes/${operation.snake}_box.dart';";
+    final methodName = kind == OperationKind.cached
+        ? '${operation.camel}Cache'
+        : operation.camel;
+    final abstractSnippet = '''
+
+  Future<${operation.pascal}Box> $methodName();
+''';
+    final implSnippet = '''
+
+  @override
+  Future<${operation.pascal}Box> $methodName() async {
+    // TODO: Read ${operation.title.toLowerCase()} from local storage.
+    return const ${operation.pascal}Box(id: '');
+  }
+''';
+
+    final file = File(path);
+    if (!file.existsSync()) {
+      _write(path, '''
+import 'package:injectable/injectable.dart';
+
+$importLine
+
+abstract class ${feature.pascal}LocalDataSource {$abstractSnippet}
+
+@LazySingleton(as: ${feature.pascal}LocalDataSource)
+class ${feature.pascal}LocalDataSourceImpl implements ${feature.pascal}LocalDataSource {
+  const ${feature.pascal}LocalDataSourceImpl();$implSnippet}
+''');
+      return;
+    }
+
+    var content = file.readAsStringSync();
+    if (content.contains('Future<${operation.pascal}Box> $methodName()')) {
+      logger.warn('skip $path already contains $methodName');
+      return;
+    }
+
+    content = _ensureImports(content, [importLine]);
+    content = _insertBeforeClassEnd(
+      content,
+      'abstract class ${feature.pascal}LocalDataSource',
+      abstractSnippet,
+    );
+    content = _insertBeforeClassEnd(
+      content,
+      'class ${feature.pascal}LocalDataSourceImpl',
+      implSnippet,
+    );
+    _write(path, content);
+  }
+
+  void _patchRepository(
+    String domainPath,
+    NameCases feature,
+    NameCases operation,
+    OperationKind kind,
+  ) {
+    final path =
+        p.join(domainPath, 'repositories', '${feature.snake}_repository.dart');
+    final returnType = _returnType(operation);
+    final imports = <String>[
+      "import '../entities/${operation.snake}_entity.dart';",
+      if (config.useEitherFailure) "import 'package:dartz/dartz.dart';",
+      if (config.useEitherFailure) "import '../failures/failure.dart';",
+    ];
+    final methods = _repositoryMethodNames(operation, kind)
+        .map((method) => '\n  $returnType $method();\n')
+        .join();
+
+    _patchClassFile(
+      path: path,
+      createContent: '''
+${imports.join('\n')}
+
+abstract interface class ${feature.pascal}Repository {$methods}
+''',
+      imports: imports,
+      duplicateNeedle: _repositoryMethodNames(operation, kind).first,
+      snippet: methods,
+    );
+  }
+
+  void _patchRepositoryImpl(
+    String dataPath,
+    String domainPath,
+    NameCases feature,
+    NameCases operation,
+    OperationKind kind,
+  ) {
+    final path = p.join(
+        dataPath, 'repositories', '${feature.snake}_repository_impl.dart');
+    final returnType = _returnType(operation);
+    final imports = <String>[
+      "import '${_packageImport(domainPath, 'entities/${operation.snake}_entity.dart')}';",
+      "import '${_packageImport(domainPath, 'repositories/${feature.snake}_repository.dart')}';",
+      if (config.useEitherFailure) "import 'package:dartz/dartz.dart';",
+      if (config.useEitherFailure)
+        "import '${_packageImport(domainPath, 'failures/failure.dart')}';",
+      if (kind.includesRemote)
+        "import '../mappers/${operation.snake}_mapper.dart';",
+      if (kind == OperationKind.local)
+        "import '../mappers/${operation.snake}_mapper.dart';",
+      if (kind == OperationKind.cached)
+        "import '../mappers/${operation.snake}_box_mapper.dart';",
+      if (kind.includesRemote)
+        "import '../remote/${feature.snake}_api_service.dart';",
+      if (kind.includesLocal)
+        "import '../local/${feature.snake}_local_data_source.dart';",
+    ];
+    final methods = _repositoryImplMethods(operation, kind, returnType);
+
+    _patchClassFile(
+      path: path,
+      createContent: '''
+${imports.toSet().join('\n')}
+
+class ${feature.pascal}RepositoryImpl implements ${feature.pascal}Repository {
+  const ${feature.pascal}RepositoryImpl({
+    ${kind.includesRemote ? 'required ${feature.pascal}ApiService apiService,' : ''}
+    ${kind.includesLocal ? 'required ${feature.pascal}LocalDataSource localDataSource,' : ''}
+  })  ${kind.includesRemote ? ': _apiService = apiService' : ''}${kind.includesRemote && kind.includesLocal ? ',' : ''}
+        ${kind.includesLocal ? '_localDataSource = localDataSource' : ''};
+
+  ${kind.includesRemote ? 'final ${feature.pascal}ApiService _apiService;' : ''}
+  ${kind.includesLocal ? 'final ${feature.pascal}LocalDataSource _localDataSource;' : ''}$methods}
+''',
+      imports: imports,
+      duplicateNeedle: '${_repositoryMethodNames(operation, kind).first}()',
+      snippet: methods,
+    );
+  }
+
+  void _patchController(
+    String presentationPath,
+    String domainPath,
+    NameCases feature,
+    NameCases operation,
+    OperationKind kind,
+  ) {
+    final path = p.join(
+        presentationPath, 'controllers', '${feature.snake}_controller.dart');
+    final useCases = kind == OperationKind.cached
+        ? [
+            _UseCaseInfo(
+              fileName: '${operation.snake}_remote_use_case.dart',
+              className: '${operation.pascal}RemoteUseCase',
+              fieldName: '_${operation.camel}RemoteUseCase',
+              methodName: '${operation.camel}Remote',
+            ),
+            _UseCaseInfo(
+              fileName: '${operation.snake}_cache_use_case.dart',
+              className: '${operation.pascal}CacheUseCase',
+              fieldName: '_${operation.camel}CacheUseCase',
+              methodName: '${operation.camel}Cache',
+            ),
+          ]
+        : [
+            _UseCaseInfo(
+              fileName: '${operation.snake}_use_case.dart',
+              className: '${operation.pascal}UseCase',
+              fieldName: '_${operation.camel}UseCase',
+              methodName: operation.camel,
+            ),
+          ];
+    final imports = <String>[
+      "import 'package:get_it/get_it.dart';",
+      for (final useCase in useCases)
+        "import '${_packageImport(domainPath, 'usecases/${useCase.fileName}')}';",
+    ];
+    final fields = useCases
+        .map((useCase) =>
+            '  var ${useCase.fieldName} = GetIt.instance.get<${useCase.className}>();')
+        .join('\n');
+    final methods = useCases.map((useCase) => '''
+
+  Future<void> ${useCase.methodName}() async {
+    await ${useCase.fieldName}();
+  }
+''').join();
+
+    _patchClassFile(
+      path: path,
+      createContent: '''
+${imports.join('\n')}
+
+class ${feature.pascal}Controller {
+$fields$methods}
+''',
+      imports: imports,
+      duplicateNeedle: 'Future<void> ${useCases.first.methodName}()',
+      snippet: '\n$fields$methods',
+    );
+  }
+
+  List<String> _repositoryMethodNames(NameCases operation, OperationKind kind) {
+    return switch (kind) {
+      OperationKind.remote => [operation.camel],
+      OperationKind.local => [operation.camel],
+      OperationKind.cached => [
+          '${operation.camel}Remote',
+          '${operation.camel}Cache',
+        ],
+    };
+  }
+
+  String _repositoryImplMethods(
+    NameCases operation,
+    OperationKind kind,
+    String returnType,
+  ) {
+    final methods = StringBuffer();
+    if (kind.includesRemote) {
+      final methodName = kind == OperationKind.cached
+          ? '${operation.camel}Remote'
+          : operation.camel;
+      methods.write('''
+
+  @override
+  $returnType $methodName() async {
+${_wrapReturn('final dto = await _apiService.${operation.camel}();', 'dto.toEntity()')}
+  }
+''');
+    }
+    if (kind.includesLocal) {
+      final methodName = kind == OperationKind.cached
+          ? '${operation.camel}Cache'
+          : operation.camel;
+      final sourceMethod = kind == OperationKind.cached
+          ? '${operation.camel}Cache'
+          : operation.camel;
+      methods.write('''
+
+  @override
+  $returnType $methodName() async {
+${_wrapReturn('final box = await _localDataSource.$sourceMethod();', 'box.toEntity()')}
+  }
+''');
+    }
+    return methods.toString();
+  }
+
+  String _wrapReturn(String loadLine, String value) {
+    if (!config.useEitherFailure) {
+      return '''    $loadLine
+    return $value;''';
+    }
+
+    return '''    try {
+      $loadLine
+      return right($value);
+    } catch (error) {
+      return left(Failure(error.toString()));
+    }''';
+  }
+
+  String _returnType(NameCases operation) {
+    final valueType = '${operation.pascal}Entity';
+    if (config.useEitherFailure) {
+      return 'Future<Either<Failure, $valueType>>';
+    }
+    return 'Future<$valueType>';
+  }
+
+  void _patchClassFile({
+    required String path,
+    required String createContent,
+    required List<String> imports,
+    required String duplicateNeedle,
+    required String snippet,
+  }) {
+    final file = File(path);
+    if (!file.existsSync()) {
+      _write(path, createContent);
+      return;
+    }
+
+    var content = file.readAsStringSync();
+    if (content.contains(duplicateNeedle)) {
+      logger.warn('skip $path already contains $duplicateNeedle');
+      return;
+    }
+
+    content = _ensureImports(content, imports);
+    content = _insertBeforeLastBrace(content, snippet);
+    _write(path, content);
+  }
+
+  String _ensureImports(String content, List<String> imports) {
+    var result = content;
+    for (final import in imports.toSet()) {
+      if (result.contains(import)) continue;
+      final lastImport = RegExp(r'''import '[^']+';|import "[^"]+";''')
+          .allMatches(result)
+          .lastOrNull;
+      if (lastImport == null) {
+        result = '$import\n\n$result';
+      } else {
+        result = result.replaceRange(
+          lastImport.end,
+          lastImport.end,
+          '\n$import',
+        );
+      }
+    }
+    return result;
+  }
+
+  String _insertBeforeClassEnd(
+    String content,
+    String classNeedle,
+    String snippet,
+  ) {
+    final classIndex = content.indexOf(classNeedle);
+    if (classIndex == -1) return _insertBeforeLastBrace(content, snippet);
+    final openBrace = content.indexOf('{', classIndex);
+    if (openBrace == -1) return _insertBeforeLastBrace(content, snippet);
+
+    var depth = 0;
+    for (var index = openBrace; index < content.length; index++) {
+      final char = content[index];
+      if (char == '{') depth++;
+      if (char == '}') depth--;
+      if (depth == 0) {
+        return '${content.substring(0, index)}$snippet${content.substring(index)}';
+      }
+    }
+
+    return _insertBeforeLastBrace(content, snippet);
+  }
+
+  String _insertBeforeLastBrace(String content, String snippet) {
+    final index = content.lastIndexOf('}');
+    if (index == -1) return '$content$snippet';
+    return '${content.substring(0, index)}$snippet${content.substring(index)}';
+  }
+
+  void _write(String path, String content) {
+    if (dryRun) {
+      logger.info('${File(path).existsSync() ? 'update' : 'create'} $path');
+      return;
+    }
+    final file = File(path);
+    file.parent.createSync(recursive: true);
+    file.writeAsStringSync(content.endsWith('\n') ? content : '$content\n');
+    logger.success('updated $path');
+  }
+}
+
+class _UseCaseInfo {
+  const _UseCaseInfo({
+    required this.fileName,
+    required this.className,
+    required this.fieldName,
+    required this.methodName,
+  });
+
+  final String fileName;
+  final String className;
+  final String fieldName;
+  final String methodName;
+}
+
+String _packageImport(String basePath, String path) {
+  final parts = p.split(p.normalize(basePath));
+  final libIndex = parts.indexOf('lib');
+  if (libIndex <= 0) return path;
+
+  final packageName = parts[libIndex - 1];
+  final libPath = p.url.joinAll(parts.skip(libIndex + 1).followedBy([path]));
+  return 'package:$packageName/$libPath';
+}

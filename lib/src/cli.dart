@@ -7,6 +7,8 @@ import 'config.dart';
 import 'file_writer.dart';
 import 'generator.dart';
 import 'generated_file.dart';
+import 'operation_patcher.dart';
+import 'templates/operation_templates.dart';
 
 class CleanArchitectCli {
   CleanArchitectCli({Logger? logger}) : _logger = logger ?? Logger();
@@ -71,7 +73,8 @@ class CleanArchitectCli {
           allowed: ['manual', 'injectable'],
         )
         ..addOption('di', allowed: ['manual', 'injectable'])
-        ..addOption('feature'),
+        ..addOption('feature')
+        ..addFlag('use-either-failure', negatable: true),
     );
 
     return parser;
@@ -109,8 +112,15 @@ class CleanArchitectCli {
     final config = _configWithOverrides(results);
     final generator = CleanArchitectGenerator(config);
     final skipPresentation = results['skip-presentation'] == true;
+    final operationKind = _operationKind(args);
+    final featureOption = results['feature'] as String?;
     final files = _filesForCreate(
-        args, generator, skipPresentation, results['feature'] as String?);
+      args,
+      generator,
+      skipPresentation,
+      featureOption,
+      operationKind,
+    );
     if (files == null) {
       exitCode = 64;
       return;
@@ -122,14 +132,26 @@ class CleanArchitectCli {
       overwrite: results['overwrite'] == true || results['force'] == true,
     );
     writer.writeAll(files);
+
+    if (operationKind != null) {
+      OperationPatcher(
+        config: config,
+        logger: _logger,
+        dryRun: results['dry-run'] == true,
+      ).apply(
+        kind: operationKind,
+        featureName: featureOption!,
+        operationName: args[1],
+      );
+    }
   }
 
   List<GeneratedFile>? _filesForCreate(
     List<String> args,
     CleanArchitectGenerator generator,
     bool skipPresentation,
-
     String? featureOption,
+    OperationKind? operationKind,
   ) {
     switch (args.first) {
       case 'architecture':
@@ -151,6 +173,24 @@ class CleanArchitectCli {
           return null;
         }
         return generator.useCase(args[1], feature: feature);
+      case 'remote-function':
+      case 'remote-method':
+      case 'local-function':
+      case 'local-method':
+      case 'cached-function':
+      case 'cached-method':
+        final feature = featureOption;
+        if (args.length < 2 || feature == null || feature.isEmpty) {
+          _logger.err(
+            'Usage: clean_architect create ${args.first} <name> --feature <feature>',
+          );
+          return null;
+        }
+        return generator.operation(
+          args[1],
+          feature: feature,
+          kind: operationKind!,
+        );
       case 'repository':
         if (args.length < 2) {
           _logger.err('Usage: clean_architect create repository <feature>');
@@ -161,6 +201,16 @@ class CleanArchitectCli {
         _logger.err('Unknown create target: ${args.first}');
         return null;
     }
+  }
+
+  OperationKind? _operationKind(List<String> args) {
+    if (args.isEmpty) return null;
+    return switch (args.first) {
+      'remote-function' || 'remote-method' => OperationKind.remote,
+      'local-function' || 'local-method' => OperationKind.local,
+      'cached-function' || 'cached-method' => OperationKind.cached,
+      _ => null,
+    };
   }
 
   CleanArchitectConfig _configWithOverrides(ArgResults results) {
@@ -177,6 +227,9 @@ class CleanArchitectCli {
       localStorage: _storageOverride(results['storage'] as String?) ??
           config.localStorage,
       useAssetGenerator: config.useAssetGenerator,
+      useEitherFailure: results.wasParsed('use-either-failure')
+          ? results['use-either-failure'] == true
+          : config.useEitherFailure,
       dependencyInjection: _dependencyInjectionOverride(
             results['dependency-injection'] as String? ??
                 results['di'] as String?,
