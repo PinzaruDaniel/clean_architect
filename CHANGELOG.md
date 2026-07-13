@@ -1,3 +1,8 @@
+## 0.1.6
+
+- Expanded README documentation with all supported configuration options and generated project structure examples.
+- Aligned auth local source, controller, and page templates with the generic feature template style.
+
 ## 0.1.5
 - Added a new caonfiguration option, `use_asset_generator`, that enables the asset generator kit.
 

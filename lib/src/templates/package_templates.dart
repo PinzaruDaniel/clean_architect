@@ -252,7 +252,7 @@ String _presentationPubspec(TemplateContext context) {
     dependencies.add('  get_it:');
   }
   if(context.config.useAssetGenerator) {
-    dependencies.add('  assetgeneratorkit: ^0.1.0');
+    dependencies.add('  assets_generator_kit: ^0.1.0');
   }
 
   return '''
