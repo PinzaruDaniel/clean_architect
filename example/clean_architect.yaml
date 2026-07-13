@@ -4,7 +4,7 @@ clean_architect:
   network: dio # dio or abstract
   local_storage: secure_storage # secure_storage or abstract
   dependency_injection: manual # manual or injectable
-  use_asset_generator: false
+  use_asset_generator: true
   models:
     use_freezed: true
     use_json_serializable: true

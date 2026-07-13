@@ -1,10 +1,15 @@
+## 0.1.7
+
+- updated example/clean_architect.yaml and added build runner package for presentation
+
 ## 0.1.6
 
 - Expanded README documentation with all supported configuration options and generated project structure examples.
 - Aligned auth local source, controller, and page templates with the generic feature template style.
 
 ## 0.1.5
-- Added a new caonfiguration option, `use_asset_generator`, that enables the asset generator kit.
+
+- Added a new configuration option, `use_asset_generator`, that enables the asset generator kit.
 
 ## 0.1.4
 
