@@ -55,6 +55,8 @@ void main() {
     expect(paths,
         contains('data/lib/features/auth/remote/auth_remote_data_source.dart'));
     expect(paths, contains('presentation/lib/pages/login_page.dart'));
+    expect(paths,
+        isNot(contains('presentation/lib/widgets/login_view_item.dart')));
     expect(
         paths, contains('data/lib/features/auth/local/models/auth_box.dart'));
     expect(paths, contains('di/lib/auth_di.dart'));
@@ -102,6 +104,8 @@ void main() {
     );
     expect(
         authController.content, contains('GetIt.instance.get<LoginUseCase>()'));
+    expect(authController.content, contains('class LoginState'));
+    expect(authController.content, isNot(contains('LoginViewItem')));
 
     final loginPage = files.singleWhere(
       (file) => file.path == 'presentation/lib/pages/login_page.dart',
@@ -380,6 +384,12 @@ clean_architect:
     expect(blocController.content,
         contains('extends Bloc<OrdersEvent, OrdersState>'));
     expect(blocPage.content, contains('BlocProvider'));
+    expect(blocPage.content,
+        contains('class OrdersViewItem extends StatelessWidget'));
+    expect(
+      blocFiles.map((file) => file.path),
+      isNot(contains('presentation/lib/widgets/orders_view_item.dart')),
+    );
     expect(blocPubspec.content, contains('flutter_bloc:'));
 
     const providerConfig = CleanArchitectConfig(
@@ -416,6 +426,8 @@ clean_architect:
 
     expect(providerController.content, contains('extends ChangeNotifier'));
     expect(providerPage.content, contains('ChangeNotifierProvider'));
+    expect(providerPage.content,
+        contains('class OrdersViewItem extends StatelessWidget'));
     expect(providerPubspec.content, contains('provider:'));
   });
 

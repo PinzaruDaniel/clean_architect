@@ -1,3 +1,7 @@
+## 0.2.3
+
+- Kept one-off feature item widgets inside their pages and moved auth form state into the controller instead of generating standalone view-item files.
+
 ## 0.2.2
 
 - Updated cached operations and use cases to use `sync<Name>` remotely and `stream<Name>` locally across generated layers.

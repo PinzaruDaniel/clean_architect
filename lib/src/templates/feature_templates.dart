@@ -493,19 +493,6 @@ List<GeneratedFile> _presentation(TemplateContext context) {
 
   return [
     GeneratedFile(
-      path: p.join(context.paths.presentation, 'widgets',
-          '${feature.snake}_view_item.dart'),
-      content: '''
-class ${feature.pascal}ViewItem {
-  const ${feature.pascal}ViewItem({
-    required this.id,
-  });
-
-  final String id;
-}
-''',
-    ),
-    GeneratedFile(
       path: p.join(context.paths.presentation, 'controllers',
           '${feature.snake}_controller.dart'),
       content: _controller(context),
@@ -528,7 +515,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
 
 import '${_domainPresentationImport(context, 'usecases/get_${feature.snake}_list_use_case.dart')}';
-import '../widgets/${feature.snake}_view_item.dart';
 
 sealed class ${feature.pascal}Event extends Equatable {
   const ${feature.pascal}Event();
@@ -543,15 +529,15 @@ class ${feature.pascal}Requested extends ${feature.pascal}Event {
 
 class ${feature.pascal}State extends Equatable {
   const ${feature.pascal}State({
-    this.items = const <${feature.pascal}ViewItem>[],
+    this.items = const <String>[],
     this.isLoading = false,
   });
 
-  final List<${feature.pascal}ViewItem> items;
+  final List<String> items;
   final bool isLoading;
 
   ${feature.pascal}State copyWith({
-    List<${feature.pascal}ViewItem>? items,
+    List<String>? items,
     bool? isLoading,
   }) {
     return ${feature.pascal}State(
@@ -582,9 +568,7 @@ class ${feature.pascal}Controller extends Bloc<${feature.pascal}Event, ${feature
     emit(
       state.copyWith(
         isLoading: false,
-        items: entities
-            .map((entity) => ${feature.pascal}ViewItem(id: entity.id))
-            .toList(growable: false),
+        items: entities.map((entity) => entity.id).toList(growable: false),
       ),
     );
   }
@@ -598,21 +582,18 @@ import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
 
 import '${_domainPresentationImport(context, 'usecases/get_${feature.snake}_list_use_case.dart')}';
-import '../widgets/${feature.snake}_view_item.dart';
 
 class ${feature.pascal}Controller extends ChangeNotifier {
   var _get${feature.pascal}ListUseCase = GetIt.instance.get<Get${feature.pascal}ListUseCase>();
 
-  var items = const <${feature.pascal}ViewItem>[];
+  var items = const <String>[];
   var isLoading = false;
 
   Future<void> load() async {
     isLoading = true;
     notifyListeners();
     final entities = await _get${feature.pascal}ListUseCase();
-    items = entities
-        .map((entity) => ${feature.pascal}ViewItem(id: entity.id))
-        .toList(growable: false);
+    items = entities.map((entity) => entity.id).toList(growable: false);
     isLoading = false;
     notifyListeners();
   }
@@ -631,18 +612,14 @@ class ${feature.pascal}Controller extends ChangeNotifier {
 ${getxImport}import '${_domainPresentationImport(context, 'usecases/get_${feature.snake}_list_use_case.dart')}';
 import 'package:get_it/get_it.dart';
 
-import '../widgets/${feature.snake}_view_item.dart';
-
 class ${feature.pascal}Controller$baseClass {
   var _get${feature.pascal}ListUseCase = GetIt.instance.get<Get${feature.pascal}ListUseCase>();
 
-  var items = const <${feature.pascal}ViewItem>[];
+  ${context.config.stateManagement == StateManagement.getx ? 'final items = <String>[].obs;' : 'var items = const <String>[];'}
 
   Future<void> load() async {
     final entities = await _get${feature.pascal}ListUseCase();
-    items = entities
-        .map((entity) => ${feature.pascal}ViewItem(id: entity.id))
-        .toList(growable: false);
+    ${context.config.stateManagement == StateManagement.getx ? 'items.assignAll(entities.map((entity) => entity.id));' : 'items = entities.map((entity) => entity.id).toList(growable: false);'}
   }
 }
 ''';
@@ -650,6 +627,21 @@ class ${feature.pascal}Controller$baseClass {
 
 String _page(TemplateContext context) {
   final feature = context.cases;
+  final viewItem = '''
+class ${feature.pascal}ViewItem extends StatelessWidget {
+  const ${feature.pascal}ViewItem({
+    required this.id,
+    super.key,
+  });
+
+  final String id;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(title: Text(id));
+  }
+}
+''';
   if (context.config.stateManagement == StateManagement.bloc) {
     return '''
 import 'package:flutter/material.dart';
@@ -671,13 +663,22 @@ class ${feature.pascal}Page extends StatelessWidget {
             if (state.isLoading) {
               return const Center(child: CircularProgressIndicator());
             }
-            return const Center(child: Text('${feature.title}'));
+            if (state.items.isEmpty) {
+              return const Center(child: Text('${feature.title}'));
+            }
+            return ListView.builder(
+              itemCount: state.items.length,
+              itemBuilder: (context, index) {
+                return ${feature.pascal}ViewItem(id: state.items[index]);
+              },
+            );
           },
         ),
       ),
     );
   }
 }
+$viewItem
 ''';
   }
 
@@ -702,13 +703,22 @@ class ${feature.pascal}Page extends StatelessWidget {
             if (controller.isLoading) {
               return const Center(child: CircularProgressIndicator());
             }
-            return const Center(child: Text('${feature.title}'));
+            if (controller.items.isEmpty) {
+              return const Center(child: Text('${feature.title}'));
+            }
+            return ListView.builder(
+              itemCount: controller.items.length,
+              itemBuilder: (context, index) {
+                return ${feature.pascal}ViewItem(id: controller.items[index]);
+              },
+            );
           },
         ),
       ),
     );
   }
 }
+$viewItem
 ''';
   }
 
@@ -741,10 +751,21 @@ class _${feature.pascal}PageState extends State<${feature.pascal}Page> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('${feature.title}')),
-      body: const Center(child: Text('${feature.title}')),
+      body: Obx(() {
+        if (controller.items.isEmpty) {
+          return const Center(child: Text('${feature.title}'));
+        }
+        return ListView.builder(
+          itemCount: controller.items.length,
+          itemBuilder: (context, index) {
+            return ${feature.pascal}ViewItem(id: controller.items[index]);
+          },
+        );
+      }),
     );
   }
 }
+$viewItem
 ''';
   }
 
@@ -762,6 +783,7 @@ class ${feature.pascal}Page extends StatelessWidget {
     );
   }
 }
+$viewItem
 ''';
 }
 

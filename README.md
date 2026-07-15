@@ -292,7 +292,6 @@ data/lib/features/auth/...
 di/lib/auth_di.dart
 presentation/lib/controllers/auth_controller.dart
 presentation/lib/pages/login_page.dart
-presentation/lib/widgets/login_view_item.dart
 ```
 
 ### Custom Layer Paths
@@ -376,10 +375,9 @@ Presentation, unless `--skip-presentation` is used:
 ```txt
 presentation/lib/controllers/orders_controller.dart
 presentation/lib/pages/orders_page.dart
-presentation/lib/widgets/orders_view_item.dart
 ```
 
-The generic feature is intentionally minimal: entity, DTO, mapper, repository contract, repository implementation, list use case, local source, Retrofit remote data source, controller, page, and view item.
+The generic feature is intentionally minimal: entity, DTO, mapper, repository contract, repository implementation, list use case, local source, Retrofit remote data source, controller, and page. Its `OrdersViewItem` is a real widget declared in `orders_page.dart`, so a one-off UI element does not get its own file.
 
 ## `create auth`
 
@@ -419,8 +417,10 @@ Presentation, unless `--skip-presentation` is used:
 ```txt
 presentation/lib/controllers/auth_controller.dart
 presentation/lib/pages/login_page.dart
-presentation/lib/widgets/login_view_item.dart
 ```
+
+Login form data is generated as `LoginState` in `auth_controller.dart`; it is
+not emitted as a non-widget file under `widgets/`.
 
 The generated remote remote data source uses Dio + Retrofit style:
 

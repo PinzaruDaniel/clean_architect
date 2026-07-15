@@ -795,43 +795,12 @@ List<GeneratedFile> _presentation(TemplateContext context) {
       path: p.join(presentation, 'pages', 'login_page.dart'),
       content: _loginPage(context),
     ),
-    GeneratedFile(
-      path: p.join(presentation, 'widgets', 'login_view_item.dart'),
-      content: '''
-class LoginViewItem {
-  const LoginViewItem({
-    this.username = '',
-    this.password = '',
-    this.isLoading = false,
-    this.errorMessage,
-  });
-
-  final String username;
-  final String password;
-  final bool isLoading;
-  final String? errorMessage;
-
-  LoginViewItem copyWith({
-    String? username,
-    String? password,
-    bool? isLoading,
-    String? errorMessage,
-  }) {
-    return LoginViewItem(
-      username: username ?? this.username,
-      password: password ?? this.password,
-      isLoading: isLoading ?? this.isLoading,
-      errorMessage: errorMessage,
-    );
-  }
-}
-''',
-    ),
   ];
 }
 
 String _authController(TemplateContext context) {
   final config = context.config;
+  final loginState = _loginState();
 
   if (config.stateManagement == StateManagement.bloc) {
     return '''
@@ -841,7 +810,7 @@ import 'package:get_it/get_it.dart';
 
 import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
 import '${_domainImport(context, 'usecases/login_use_case.dart')}';
-import '../widgets/login_view_item.dart';
+$loginState
 
 sealed class AuthEvent extends Equatable {
   const AuthEvent();
@@ -872,10 +841,10 @@ class AuthSubmitted extends AuthEvent {
   const AuthSubmitted();
 }
 
-class AuthController extends Bloc<AuthEvent, LoginViewItem> {
+class AuthController extends Bloc<AuthEvent, LoginState> {
   AuthController()
       : _loginUseCase = GetIt.instance.get<LoginUseCase>(),
-        super(const LoginViewItem()) {
+        super(const LoginState()) {
     on<AuthUsernameChanged>((event, emit) {
       emit(state.copyWith(username: event.value));
     });
@@ -889,7 +858,7 @@ class AuthController extends Bloc<AuthEvent, LoginViewItem> {
 
   Future<void> _onSubmitted(
     AuthSubmitted event,
-    Emitter<LoginViewItem> emit,
+    Emitter<LoginState> emit,
   ) async {
     emit(state.copyWith(isLoading: true));
     try {
@@ -915,11 +884,11 @@ import 'package:get_it/get_it.dart';
 
 import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
 import '${_domainImport(context, 'usecases/login_use_case.dart')}';
-import '../widgets/login_view_item.dart';
+$loginState
 
 class AuthController extends ChangeNotifier {
   var _loginUseCase = GetIt.instance.get<LoginUseCase>();
-  var viewItem = const LoginViewItem();
+  var viewItem = const LoginState();
 
   void setUsername(String value) {
     viewItem = viewItem.copyWith(username: value);
@@ -961,8 +930,8 @@ class AuthController extends ChangeNotifier {
       ? ' extends GetxController'
       : '';
   final viewItemDeclaration = config.stateManagement == StateManagement.getx
-      ? 'final viewItem = const LoginViewItem().obs;'
-      : 'LoginViewItem viewItem = const LoginViewItem();';
+      ? 'final viewItem = const LoginState().obs;'
+      : 'LoginState viewItem = const LoginState();';
   final readUsername = config.stateManagement == StateManagement.getx
       ? 'viewItem.value.username'
       : 'viewItem.username';
@@ -989,8 +958,7 @@ class AuthController extends ChangeNotifier {
 ${getxImport}import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
 import '${_domainImport(context, 'usecases/login_use_case.dart')}';
 import 'package:get_it/get_it.dart';
-
-import '../widgets/login_view_item.dart';
+$loginState
 
 class AuthController$baseClass {
   var _loginUseCase = GetIt.instance.get<LoginUseCase>();
@@ -1014,6 +982,38 @@ class AuthController$baseClass {
 ''';
 }
 
+String _loginState() {
+  return '''
+class LoginState {
+  const LoginState({
+    this.username = '',
+    this.password = '',
+    this.isLoading = false,
+    this.errorMessage,
+  });
+
+  final String username;
+  final String password;
+  final bool isLoading;
+  final String? errorMessage;
+
+  LoginState copyWith({
+    String? username,
+    String? password,
+    bool? isLoading,
+    String? errorMessage,
+  }) {
+    return LoginState(
+      username: username ?? this.username,
+      password: password ?? this.password,
+      isLoading: isLoading ?? this.isLoading,
+      errorMessage: errorMessage,
+    );
+  }
+}
+''';
+}
+
 String _loginPage(TemplateContext context) {
   final config = context.config;
   if (config.stateManagement == StateManagement.bloc) {
@@ -1032,7 +1032,7 @@ class LoginPage extends StatelessWidget {
       create: (_) => AuthController(),
       child: Scaffold(
         appBar: AppBar(title: const Text('Login')),
-        body: BlocBuilder<AuthController, LoginViewItem>(
+        body: BlocBuilder<AuthController, LoginState>(
           builder: (context, viewItem) {
             final controller = context.read<AuthController>();
             return Padding(
