@@ -21,6 +21,10 @@ void main() {
       dependencyInjection: DependencyInjection.manual,
       useAssetGenerator: true,
       useEitherFailure: false,
+      flutter: FlutterConfig(
+        createPresentation: false,
+        platforms: ['android', 'ios'],
+      ),
       models: ModelConfig(
         useFreezed: false,
         useJsonSerializable: false,

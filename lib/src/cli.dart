@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:mason_logger/mason_logger.dart';
+import 'package:path/path.dart' as p;
 
 import 'config.dart';
 import 'file_writer.dart';
@@ -64,6 +65,8 @@ class CleanArchitectCli {
         ..addFlag('overwrite', negatable: false)
         ..addFlag('force', abbr: 'f', negatable: false)
         ..addFlag('skip-presentation', negatable: false)
+        ..addFlag('flutter-create', negatable: true)
+        ..addOption('platforms')
         ..addOption('state', allowed: ['getx', 'none'])
         ..addOption('network', allowed: ['dio', 'abstract'])
         ..addOption('storage', allowed: ['secure_storage', 'abstract'])
@@ -132,6 +135,18 @@ class CleanArchitectCli {
       overwrite: results['overwrite'] == true || results['force'] == true,
     );
     writer.writeAll(files);
+
+    if (_shouldRunFlutterCreate(
+      args,
+      config,
+      skipPresentation: skipPresentation,
+      operationKind: operationKind,
+    )) {
+      _runFlutterCreate(
+        config,
+        dryRun: results['dry-run'] == true,
+      );
+    }
 
     if (operationKind != null) {
       OperationPatcher(
@@ -230,6 +245,13 @@ class CleanArchitectCli {
       useEitherFailure: results.wasParsed('use-either-failure')
           ? results['use-either-failure'] == true
           : config.useEitherFailure,
+      flutter: FlutterConfig(
+        createPresentation: results.wasParsed('flutter-create')
+            ? results['flutter-create'] == true
+            : config.flutter.createPresentation,
+        platforms: _platformsOverride(results['platforms'] as String?) ??
+            config.flutter.platforms,
+      ),
       dependencyInjection: _dependencyInjectionOverride(
             results['dependency-injection'] as String? ??
                 results['di'] as String?,
@@ -238,6 +260,77 @@ class CleanArchitectCli {
       models: config.models,
       paths: config.paths,
     );
+  }
+
+  List<String>? _platformsOverride(String? value) {
+    if (value == null) return null;
+    return value
+        .split(',')
+        .map((platform) => platform.trim())
+        .where((platform) => platform.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  bool _shouldRunFlutterCreate(
+    List<String> args,
+    CleanArchitectConfig config, {
+    required bool skipPresentation,
+    required OperationKind? operationKind,
+  }) {
+    if (skipPresentation || !config.flutter.createPresentation) return false;
+    if (operationKind != null || args.isEmpty) return false;
+    return switch (args.first) {
+      'architecture' || 'base' || 'auth' || 'feature' => true,
+      _ => false,
+    };
+  }
+
+  void _runFlutterCreate(
+    CleanArchitectConfig config, {
+    required bool dryRun,
+  }) {
+    final presentationRoot = _packageRoot(config.paths.presentation);
+    final platforms = config.flutter.platforms;
+    final args = [
+      'create',
+      '.',
+      if (platforms.isNotEmpty) '--platforms=${platforms.join(',')}',
+    ];
+
+    if (dryRun) {
+      _logger.info('run (cd $presentationRoot && flutter ${args.join(' ')})');
+      return;
+    }
+
+    try {
+      final result = Process.runSync(
+        'flutter',
+        args,
+        workingDirectory: presentationRoot,
+      );
+      if (result.exitCode == 0) {
+        _logger.success('ran flutter ${args.join(' ')} in $presentationRoot');
+        return;
+      }
+
+      _logger.warn('flutter create failed in $presentationRoot');
+      if (result.stderr.toString().trim().isNotEmpty) {
+        _logger.err(result.stderr.toString().trim());
+      }
+      exitCode = result.exitCode;
+    } on ProcessException catch (error) {
+      _logger.warn(
+          'flutter executable not found. Install Flutter or run manually:');
+      _logger.info('cd $presentationRoot && flutter ${args.join(' ')}');
+      _logger.detail(error.message);
+    }
+  }
+
+  String _packageRoot(String libPath) {
+    final parts = p.split(p.normalize(libPath));
+    final libIndex = parts.indexOf('lib');
+    if (libIndex == -1) return libPath;
+    return p.joinAll(parts.take(libIndex));
   }
 
   StateManagement? _stateOverride(String? value) {

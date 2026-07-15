@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:clean_architect/src/config.dart';
 import 'package:clean_architect/src/generator.dart';
 import 'package:clean_architect/src/templates/operation_templates.dart';
@@ -133,6 +135,10 @@ void main() {
       dependencyInjection: DependencyInjection.manual,
       useAssetGenerator: true,
       useEitherFailure: false,
+      flutter: FlutterConfig(
+        createPresentation: false,
+        platforms: ['android', 'ios'],
+      ),
       models: ModelConfig(
         useFreezed: true,
         useJsonSerializable: true,
@@ -172,6 +178,10 @@ void main() {
       dependencyInjection: DependencyInjection.injectable,
       useAssetGenerator: true,
       useEitherFailure: false,
+      flutter: FlutterConfig(
+        createPresentation: false,
+        platforms: ['android', 'ios'],
+      ),
       models: ModelConfig(
         useFreezed: true,
         useJsonSerializable: true,
@@ -206,6 +216,10 @@ void main() {
       dependencyInjection: DependencyInjection.manual,
       useAssetGenerator: true,
       useEitherFailure: true,
+      flutter: FlutterConfig(
+        createPresentation: false,
+        platforms: ['android', 'ios'],
+      ),
       models: ModelConfig(
         useFreezed: true,
         useJsonSerializable: true,
@@ -255,6 +269,10 @@ void main() {
       dependencyInjection: DependencyInjection.manual,
       useAssetGenerator: true,
       useEitherFailure: true,
+      flutter: FlutterConfig(
+        createPresentation: false,
+        platforms: ['android', 'ios'],
+      ),
       models: ModelConfig(
         useFreezed: true,
         useJsonSerializable: true,
@@ -285,5 +303,24 @@ void main() {
         contains('return left(Failure(error.toString()))'));
     expect(useCase.content,
         contains('Future<Either<Failure, List<OrdersEntity>>> call()'));
+  });
+  test('config parses flutter create presentation settings', () {
+    final directory =
+        Directory.systemTemp.createTempSync('clean_architect_config_');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    final file = File('${directory.path}/clean_architect.yaml')
+      ..writeAsStringSync('''
+clean_architect:
+  flutter:
+    create_presentation: true
+    platforms:
+      - android
+      - web
+''');
+
+    final config = CleanArchitectConfig.fromFile(file);
+
+    expect(config.flutter.createPresentation, isTrue);
+    expect(config.flutter.platforms, ['android', 'web']);
   });
 }

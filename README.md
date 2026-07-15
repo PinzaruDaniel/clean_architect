@@ -84,6 +84,8 @@ clean_architect create auth --di injectable
 clean_architect create auth --dependency-injection manual
 clean_architect create feature orders --use-either-failure
 clean_architect create feature orders --no-use-either-failure
+clean_architect create architecture --flutter-create --platforms android,ios
+clean_architect create auth --flutter-create --platforms android,ios,web
 ```
 
 `--overwrite` and `--force` are required before existing generated files are replaced.
@@ -107,6 +109,11 @@ clean_architect:
   dependency_injection: manual # manual or injectable
   use_asset_generator: true
   use_either_failure: false
+  flutter:
+    create_presentation: false
+    platforms:
+      - android
+      - ios
   models:
     use_freezed: true
     use_json_serializable: true
@@ -128,6 +135,8 @@ clean_architect:
 | `dependency_injection` | `manual`, `injectable` | `manual` | Manual DI builder files or injectable/get_it setup files and annotations. |
 | `use_asset_generator` | `true`, `false` | `true` | Whether presentation gets `asset_generator_kit.yaml` and the asset generator dependency. |
 | `use_either_failure` | `true`, `false` | `false` | Whether generated repositories, repository implementations, and use cases return `Future<Either<Failure, T>>`. |
+| `flutter.create_presentation` | `true`, `false` | `false` | Whether to run `flutter create .` automatically inside the generated presentation package. |
+| `flutter.platforms` | list or comma-separated text | `android`, `ios` | Platforms passed to `flutter create . --platforms=...`. |
 | `models.use_freezed` | `true`, `false` | `true` | Whether entities/DTOs use Freezed. |
 | `models.use_json_serializable` | `true`, `false` | `true` | Whether DTOs include JSON serialization parts/factories. |
 | `paths.domain` | path | `domain/lib` | Domain layer feature root. |
@@ -200,7 +209,61 @@ flutter create .
 flutter pub get
 ```
 
+Or let `clean_architect` do the Flutter project bootstrap automatically:
+
+```sh
+clean_architect create architecture --flutter-create --platforms android,ios
+```
+
+The same behavior can be configured in `clean_architect.yaml`:
+
+```yaml
+clean_architect:
+  flutter:
+    create_presentation: true
+    platforms:
+      - android
+      - ios
+      - web
+```
+
+When enabled, the CLI runs `flutter create . --platforms=<platforms>` from the generated `presentation/` package root after writing the architecture files. `--dry-run` prints the command without executing it. `--skip-presentation` disables this step for the current command.
+
 Run `dart pub get` in the other layer packages as needed.
+
+## Flutter Presentation Bootstrap
+
+By default, `clean_architect` creates the `presentation` package files but does not run Flutter tooling. This keeps generation fast and works even on machines without Flutter installed.
+
+To generate Flutter platform folders automatically, use:
+
+```sh
+clean_architect create architecture --flutter-create --platforms android,ios
+```
+
+Supported platform names are the Flutter platform names: `android`, `ios`, `web`, `macos`, `windows`, and `linux`.
+
+The YAML equivalent is:
+
+```yaml
+clean_architect:
+  flutter:
+    create_presentation: true
+    platforms: android,ios
+```
+
+or:
+
+```yaml
+clean_architect:
+  flutter:
+    create_presentation: true
+    platforms:
+      - android
+      - ios
+```
+
+This only runs for commands that generate presentation structure: `create architecture`, `create base`, `create auth`, and `create feature <name>`. It is skipped for operation commands, `create usecase`, `create repository`, and commands using `--skip-presentation`.
 
 ## Structure Modes
 

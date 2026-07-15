@@ -1,3 +1,7 @@
+## 0.1.9
+
+- Added optional Flutter presentation bootstrap with `flutter.create_presentation`, `flutter.platforms`, `--flutter-create`, and `--platforms`.
+
 ## 0.1.8
 
 - Added remote/local/cached operation commands for extending existing features.

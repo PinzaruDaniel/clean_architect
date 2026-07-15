@@ -23,7 +23,8 @@ class CleanArchitectConfig {
       required this.models,
       required this.paths,
       required this.useAssetGenerator,
-      required this.useEitherFailure});
+      required this.useEitherFailure,
+      required this.flutter});
 
   factory CleanArchitectConfig.defaults() {
     return const CleanArchitectConfig(
@@ -34,6 +35,10 @@ class CleanArchitectConfig {
       dependencyInjection: DependencyInjection.manual,
       useAssetGenerator: true,
       useEitherFailure: false,
+      flutter: FlutterConfig(
+        createPresentation: false,
+        platforms: ['android', 'ios'],
+      ),
       models: ModelConfig(
         useFreezed: true,
         useJsonSerializable: true,
@@ -67,6 +72,7 @@ class CleanArchitectConfig {
     final defaults = CleanArchitectConfig.defaults();
     final models = root['models'];
     final paths = root['paths'];
+    final flutter = root['flutter'];
 
     return CleanArchitectConfig(
       structure: _enumValue(
@@ -109,6 +115,18 @@ class CleanArchitectConfig {
         'use_either_failure',
         defaults.useEitherFailure,
       ),
+      flutter: FlutterConfig(
+        createPresentation: _boolValue(
+          flutter,
+          'create_presentation',
+          defaults.flutter.createPresentation,
+        ),
+        platforms: _stringListValue(
+          flutter,
+          'platforms',
+          defaults.flutter.platforms,
+        ),
+      ),
       models: ModelConfig(
         useFreezed:
             _boolValue(models, 'use_freezed', defaults.models.useFreezed),
@@ -140,6 +158,7 @@ class CleanArchitectConfig {
   final PathConfig paths;
   final bool useAssetGenerator;
   final bool useEitherFailure;
+  final FlutterConfig flutter;
 
   static const fileName = 'clean_architect.yaml';
 
@@ -153,6 +172,11 @@ clean_architect:
   dependency_injection: manual # manual or injectable
   use_asset_generator: true
   use_either_failure: false
+  flutter:
+    create_presentation: false
+    platforms:
+      - android
+      - ios
   models:
     use_freezed: true
     use_json_serializable: true
@@ -169,6 +193,16 @@ clean_architect:
   String get networkName => _networkName(network);
   String get localStorageName => _storageName(localStorage);
   String get dependencyInjectionName => _diName(dependencyInjection);
+}
+
+class FlutterConfig {
+  const FlutterConfig({
+    required this.createPresentation,
+    required this.platforms,
+  });
+
+  final bool createPresentation;
+  final List<String> platforms;
 }
 
 class ModelConfig {
@@ -219,6 +253,21 @@ bool _boolValue(Object? map, String key, bool fallback) {
 String _stringValue(Object? map, String key, String fallback) {
   if (map is! YamlMap || map[key] == null) return fallback;
   return map[key].toString();
+}
+
+List<String> _stringListValue(Object? map, String key, List<String> fallback) {
+  if (map is! YamlMap || map[key] == null) return fallback;
+  final value = map[key];
+  if (value is YamlList) {
+    return value.map((item) => item.toString()).toList(growable: false);
+  }
+  final text = value.toString();
+  if (text.trim().isEmpty) return const [];
+  return text
+      .split(',')
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toList(growable: false);
 }
 
 @visibleForTesting
