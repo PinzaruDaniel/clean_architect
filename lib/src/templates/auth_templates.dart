@@ -158,12 +158,12 @@ extension AuthTokenDtoMapper on AuthTokenDto {
 ''',
     ),
     GeneratedFile(
-      path: p.join(data, 'remote', 'auth_api_service.dart'),
+      path: p.join(data, 'remote', 'auth_remote_data_source.dart'),
       content: _remoteSource(context),
     ),
     GeneratedFile(
-      path: p.join(data, 'local', 'models', '.gitkeep'),
-      content: '',
+      path: p.join(data, 'local', 'models', 'auth_box.dart'),
+      content: _authBox(context),
     ),
     GeneratedFile(
       path: p.join(data, 'local', 'auth_local_data_source.dart'),
@@ -178,21 +178,21 @@ import '${_domainImport(context, 'repositories/auth_repository.dart')}';
 import '../mappers/auth_token_mapper.dart';
 import '../remote/models/login_request_dto.dart';
 import '../local/auth_local_data_source.dart';
-import '../remote/auth_api_service.dart';
+import '../remote/auth_remote_data_source.dart';
 
 ${_lazySingletonAnnotation(context)}class AuthRepositoryImpl implements AuthRepository {
   const AuthRepositoryImpl({
-    required AuthApiService authApiService,
+    required AuthRemoteDataSource authRemoteDataSource,
     required AuthLocalDataSource localDataSource,
-  })  : _authApiService = authApiService,
+  })  : _authRemoteDataSource = authRemoteDataSource,
         _localDataSource = localDataSource;
 
-  final AuthApiService _authApiService;
+  final AuthRemoteDataSource _authRemoteDataSource;
   final AuthLocalDataSource _localDataSource;
 
   @override
   Future<AuthTokenEntity> login(AuthCredentialsEntity credentials) async {
-    final response = await _authApiService.login(
+    final response = await _authRemoteDataSource.login(
       LoginRequestDto(
         username: credentials.username,
         password: credentials.password,
@@ -454,13 +454,13 @@ import 'package:retrofit/retrofit.dart';
 
 import 'models/auth_token_dto.dart';
 
-part 'auth_api_service.g.dart';
+part 'auth_remote_data_source.g.dart';
 
 @lazySingleton
 @RestApi(baseUrl: '')
-abstract class AuthApiService {
+abstract class AuthRemoteDataSource {
   @factoryMethod
-  factory AuthApiService(@Named("auth_dio") Dio dio) = _AuthApiService;
+  factory AuthRemoteDataSource(@Named("auth_dio") Dio dio) = _AuthRemoteDataSource;
 
   @POST('/authorization/token/')
   Future<AuthTokenDto> login(@Body() Map<String, dynamic> body);
@@ -468,23 +468,94 @@ abstract class AuthApiService {
 ''';
 }
 
+String _authBox(TemplateContext context) {
+  return switch (context.config.localStorage) {
+    LocalStorage.hive => '''
+import 'package:hive/hive.dart';
+
+part 'auth_box.g.dart';
+
+@HiveType(typeId: 0)
+class AuthBox extends HiveObject {
+  AuthBox({
+    this.id = 0,
+    required this.username,
+    required this.password,
+  });
+
+  @HiveField(0)
+  int id;
+
+  @HiveField(1)
+  String username;
+
+  @HiveField(2)
+  String password;
+}
+''',
+    LocalStorage.objectbox => '''
+import 'package:objectbox/objectbox.dart';
+
+@Entity()
+class AuthBox {
+  AuthBox({
+    this.id = 0,
+    required this.username,
+    required this.password,
+  });
+
+  @Id()
+  int id;
+
+  String username;
+
+  String password;
+}
+''',
+    _ => '''
+class AuthBox {
+  const AuthBox({
+    this.id = 0,
+    required this.username,
+    required this.password,
+  });
+
+  final int id;
+  final String username;
+  final String password;
+}
+''',
+  };
+}
+
 String _localSource(TemplateContext context) {
   final config = context.config;
-  final secure = config.localStorage == LocalStorage.secureStorage;
-  final import = secure
-      ? "import 'package:flutter_secure_storage/flutter_secure_storage.dart';\n"
-      : '';
-  final constructor = secure
-      ? '''
+  final annotation = _lazySingletonAsAnnotation(context, 'AuthLocalDataSource');
+
+  if (config.localStorage == LocalStorage.secureStorage) {
+    return '''
+${_injectableImport(context)}import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
+
+abstract class AuthLocalDataSource {
+  Future<void> saveCredentials(AuthCredentialsEntity credentials);
+
+  Future<AuthCredentialsEntity?> getCredentials();
+
+  Future<void> clearCredentials();
+}
+
+$annotation
+class AuthLocalDataSourceImpl implements AuthLocalDataSource {
   AuthLocalDataSourceImpl(this._storage);
 
   final FlutterSecureStorage _storage;
-'''
-      : '''
-  const AuthLocalDataSourceImpl();
-''';
-  final body = secure
-      ? '''+
+
+  static Future<AuthLocalDataSource> init() async {
+    return AuthLocalDataSourceImpl(const FlutterSecureStorage());
+  }
+
   static const _usernameKey = 'auth_username';
   static const _passwordKey = 'auth_password';
 
@@ -511,11 +582,130 @@ String _localSource(TemplateContext context) {
     await _storage.delete(key: _usernameKey);
     await _storage.delete(key: _passwordKey);
   }
-'''
-      : '''
+}
+''';
+  }
+
+  if (config.localStorage == LocalStorage.hive) {
+    return '''
+${_injectableImport(context)}import 'package:hive/hive.dart';
+
+import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
+import 'models/auth_box.dart';
+
+abstract class AuthLocalDataSource {
+  Future<void> saveCredentials(AuthCredentialsEntity credentials);
+
+  Future<AuthCredentialsEntity?> getCredentials();
+
+  Future<void> clearCredentials();
+}
+
+$annotation
+class AuthLocalDataSourceImpl implements AuthLocalDataSource {
+  const AuthLocalDataSourceImpl(this._box);
+
+  final Box<AuthBox> _box;
+
+  static Future<AuthLocalDataSource> init() async {
+    final box = await Hive.openBox<AuthBox>('auth_box');
+    return AuthLocalDataSourceImpl(box);
+  }
+
   @override
   Future<void> saveCredentials(AuthCredentialsEntity credentials) async {
-    // TODO: Save credentials using your local storage.
+    await _box.put(
+      'credentials',
+      AuthBox(username: credentials.username, password: credentials.password),
+    );
+  }
+
+  @override
+  Future<AuthCredentialsEntity?> getCredentials() async {
+    final box = _box.get('credentials');
+    if (box == null) return null;
+    return AuthCredentialsEntity(username: box.username, password: box.password);
+  }
+
+  @override
+  Future<void> clearCredentials() async {
+    await _box.delete('credentials');
+  }
+}
+''';
+  }
+
+  if (config.localStorage == LocalStorage.objectbox) {
+    return '''
+${_injectableImport(context)}import 'package:objectbox/objectbox.dart';
+
+import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
+import 'models/auth_box.dart';
+
+abstract class AuthLocalDataSource {
+  Future<void> saveCredentials(AuthCredentialsEntity credentials);
+
+  Future<AuthCredentialsEntity?> getCredentials();
+
+  Future<void> clearCredentials();
+}
+
+$annotation
+class AuthLocalDataSourceImpl implements AuthLocalDataSource {
+  const AuthLocalDataSourceImpl(this._box);
+
+  final Box<AuthBox> _box;
+
+  static AuthLocalDataSource init(Store store) {
+    return AuthLocalDataSourceImpl(Box<AuthBox>(store));
+  }
+
+  @override
+  Future<void> saveCredentials(AuthCredentialsEntity credentials) async {
+    _box.put(AuthBox(username: credentials.username, password: credentials.password));
+  }
+
+  @override
+  Future<AuthCredentialsEntity?> getCredentials() async {
+    final boxes = _box.getAll();
+    if (boxes.isEmpty) return null;
+    final box = boxes.first;
+    return AuthCredentialsEntity(username: box.username, password: box.password);
+  }
+
+  @override
+  Future<void> clearCredentials() async {
+    _box.removeAll();
+  }
+}
+''';
+  }
+
+  return '''
+${_injectableImport(context)}import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
+import 'models/auth_box.dart';
+
+abstract class AuthLocalDataSource {
+  Future<void> saveCredentials(AuthCredentialsEntity credentials);
+
+  Future<AuthCredentialsEntity?> getCredentials();
+
+  Future<void> clearCredentials();
+}
+
+$annotation
+class AuthLocalDataSourceImpl implements AuthLocalDataSource {
+  const AuthLocalDataSourceImpl();
+
+  static Future<AuthLocalDataSource> init() async {
+    return const AuthLocalDataSourceImpl();
+  }
+
+  @override
+  Future<void> saveCredentials(AuthCredentialsEntity credentials) async {
+    final placeholder = AuthBox(username: credentials.username, password: credentials.password);
+    // TODO: Save credentials using your local storage. Remove placeholder when implemented.
+    placeholder.id;
   }
 
   @override
@@ -528,24 +718,7 @@ String _localSource(TemplateContext context) {
   Future<void> clearCredentials() async {
     // TODO: Clear credentials using your local storage.
   }
-''';
-
-  return '''
-${import}import 'package:injectable/injectable.dart';
-
-import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
-
-abstract class AuthLocalDataSource {
-  Future<void> saveCredentials(AuthCredentialsEntity credentials);
-
-  Future<AuthCredentialsEntity?> getCredentials();
-
-  Future<void> clearCredentials();
 }
-
-@LazySingleton(as: AuthLocalDataSource)
-class AuthLocalDataSourceImpl implements AuthLocalDataSource {
-$constructor$body}
 ''';
 }
 
@@ -562,7 +735,7 @@ GeneratedFile _di(TemplateContext context) {
     content: '''
 import '${_dataImport(context, 'repositories/auth_repository_impl.dart')}';
 import '${_dataImport(context, 'local/auth_local_data_source.dart')}';
-import '${_dataImport(context, 'remote/auth_api_service.dart')}';
+import '${_dataImport(context, 'remote/auth_remote_data_source.dart')}';
 import '${_domainImport(context, 'repositories/auth_repository.dart')}';
 import '${_domainImport(context, 'usecases/clear_auth_credentials_use_case.dart')}';
 import '${_domainImport(context, 'usecases/get_auth_credentials_use_case.dart')}';
@@ -589,11 +762,11 @@ class AuthDependencies {
 }
 
 AuthDependencies buildAuthDependencies({
-  required AuthApiService authApiService,
+  required AuthRemoteDataSource authRemoteDataSource,
   required AuthLocalDataSource localDataSource,
 }) {
   final repository = AuthRepositoryImpl(
-    authApiService: authApiService,
+    authRemoteDataSource: authRemoteDataSource,
     localDataSource: localDataSource,
   );
 
@@ -659,6 +832,128 @@ class LoginViewItem {
 
 String _authController(TemplateContext context) {
   final config = context.config;
+
+  if (config.stateManagement == StateManagement.bloc) {
+    return '''
+import 'package:equatable/equatable.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:get_it/get_it.dart';
+
+import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
+import '${_domainImport(context, 'usecases/login_use_case.dart')}';
+import '../widgets/login_view_item.dart';
+
+sealed class AuthEvent extends Equatable {
+  const AuthEvent();
+
+  @override
+  List<Object?> get props => [];
+}
+
+class AuthUsernameChanged extends AuthEvent {
+  const AuthUsernameChanged(this.value);
+
+  final String value;
+
+  @override
+  List<Object?> get props => [value];
+}
+
+class AuthPasswordChanged extends AuthEvent {
+  const AuthPasswordChanged(this.value);
+
+  final String value;
+
+  @override
+  List<Object?> get props => [value];
+}
+
+class AuthSubmitted extends AuthEvent {
+  const AuthSubmitted();
+}
+
+class AuthController extends Bloc<AuthEvent, LoginViewItem> {
+  AuthController()
+      : _loginUseCase = GetIt.instance.get<LoginUseCase>(),
+        super(const LoginViewItem()) {
+    on<AuthUsernameChanged>((event, emit) {
+      emit(state.copyWith(username: event.value));
+    });
+    on<AuthPasswordChanged>((event, emit) {
+      emit(state.copyWith(password: event.value));
+    });
+    on<AuthSubmitted>(_onSubmitted);
+  }
+
+  final LoginUseCase _loginUseCase;
+
+  Future<void> _onSubmitted(
+    AuthSubmitted event,
+    Emitter<LoginViewItem> emit,
+  ) async {
+    emit(state.copyWith(isLoading: true));
+    try {
+      await _loginUseCase(
+        AuthCredentialsEntity(
+          username: state.username,
+          password: state.password,
+        ),
+      );
+      emit(state.copyWith(isLoading: false));
+    } catch (error) {
+      emit(state.copyWith(isLoading: false, errorMessage: error.toString()));
+    }
+  }
+}
+''';
+  }
+
+  if (config.stateManagement == StateManagement.provider) {
+    return '''
+import 'package:flutter/foundation.dart';
+import 'package:get_it/get_it.dart';
+
+import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
+import '${_domainImport(context, 'usecases/login_use_case.dart')}';
+import '../widgets/login_view_item.dart';
+
+class AuthController extends ChangeNotifier {
+  var _loginUseCase = GetIt.instance.get<LoginUseCase>();
+  var viewItem = const LoginViewItem();
+
+  void setUsername(String value) {
+    viewItem = viewItem.copyWith(username: value);
+    notifyListeners();
+  }
+
+  void setPassword(String value) {
+    viewItem = viewItem.copyWith(password: value);
+    notifyListeners();
+  }
+
+  Future<void> login() async {
+    viewItem = viewItem.copyWith(isLoading: true);
+    notifyListeners();
+    try {
+      await _loginUseCase(
+        AuthCredentialsEntity(
+          username: viewItem.username,
+          password: viewItem.password,
+        ),
+      );
+      viewItem = viewItem.copyWith(isLoading: false);
+    } catch (error) {
+      viewItem = viewItem.copyWith(
+        isLoading: false,
+        errorMessage: error.toString(),
+      );
+    }
+    notifyListeners();
+  }
+}
+''';
+  }
+
   final getxImport = config.stateManagement == StateManagement.getx
       ? "import 'package:get/get.dart';\n"
       : '';
@@ -721,12 +1016,123 @@ class AuthController$baseClass {
 
 String _loginPage(TemplateContext context) {
   final config = context.config;
+  if (config.stateManagement == StateManagement.bloc) {
+    return '''
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../controllers/auth_controller.dart';
+
+class LoginPage extends StatelessWidget {
+  const LoginPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) => AuthController(),
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Login')),
+        body: BlocBuilder<AuthController, LoginViewItem>(
+          builder: (context, viewItem) {
+            final controller = context.read<AuthController>();
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    decoration: const InputDecoration(labelText: 'Username'),
+                    onChanged: (value) => controller.add(AuthUsernameChanged(value)),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    obscureText: true,
+                    decoration: const InputDecoration(labelText: 'Password'),
+                    onChanged: (value) => controller.add(AuthPasswordChanged(value)),
+                  ),
+                  if (viewItem.errorMessage != null) ...[
+                    const SizedBox(height: 12),
+                    Text(viewItem.errorMessage!, style: const TextStyle(color: Colors.red)),
+                  ],
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: viewItem.isLoading
+                        ? null
+                        : () => controller.add(const AuthSubmitted()),
+                    child: Text(viewItem.isLoading ? 'Signing in...' : 'Sign in'),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+''';
+  }
+
+  if (config.stateManagement == StateManagement.provider) {
+    return '''
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../controllers/auth_controller.dart';
+
+class LoginPage extends StatelessWidget {
+  const LoginPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => AuthController(),
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Login')),
+        body: Consumer<AuthController>(
+          builder: (context, controller, child) {
+            final viewItem = controller.viewItem;
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    decoration: const InputDecoration(labelText: 'Username'),
+                    onChanged: controller.setUsername,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    obscureText: true,
+                    decoration: const InputDecoration(labelText: 'Password'),
+                    onChanged: controller.setPassword,
+                  ),
+                  if (viewItem.errorMessage != null) ...[
+                    const SizedBox(height: 12),
+                    Text(viewItem.errorMessage!, style: const TextStyle(color: Colors.red)),
+                  ],
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: viewItem.isLoading ? null : controller.login,
+                    child: Text(viewItem.isLoading ? 'Signing in...' : 'Sign in'),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+''';
+  }
+
   if (config.stateManagement == StateManagement.getx) {
     return '''
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '${_domainImport(context, 'usecases/login_use_case.dart')}';
 import '../controllers/auth_controller.dart';
 
 class LoginPage extends StatefulWidget {
@@ -808,6 +1214,12 @@ class LoginPage extends StatelessWidget {
   }
 }
 ''';
+}
+
+String _lazySingletonAsAnnotation(TemplateContext context, String typeName) {
+  return context.config.dependencyInjection == DependencyInjection.injectable
+      ? '@LazySingleton(as: $typeName)'
+      : '';
 }
 
 String _domainImport(TemplateContext context, String path) {

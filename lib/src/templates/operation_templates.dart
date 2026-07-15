@@ -1,6 +1,7 @@
 import 'package:path/path.dart' as p;
 
 import '../case_utils.dart';
+import '../config.dart';
 import '../generated_file.dart';
 import '../generator.dart';
 
@@ -83,10 +84,10 @@ class ${operation.pascal}Entity with _\$${operation.pascal}Entity {
         : '''
 class ${operation.pascal}Entity {
   const ${operation.pascal}Entity({
-    required this.id,
+    this.id = 0,
   });
 
-  final String id;
+  final int id;
 }
 ''',
   );
@@ -142,18 +143,48 @@ GeneratedFile _box(TemplateContext context, NameCases operation) {
     path: p.join(
       context.paths.data,
       'local',
-      'boxes',
+      'models',
       '${operation.snake}_box.dart',
     ),
-    content: '''
-class ${operation.pascal}Box {
-  const ${operation.pascal}Box({
-    required this.id,
+    content: switch (context.config.localStorage) {
+      LocalStorage.hive => '''
+import 'package:hive/hive.dart';
+
+part '${operation.snake}_box.g.dart';
+
+@HiveType(typeId: 0)
+class ${operation.pascal}Box extends HiveObject {
+  ${operation.pascal}Box({
+    this.id = 0,
   });
 
-  final String id;
+  @HiveField(0)
+  int id;
 }
 ''',
+      LocalStorage.objectbox => '''
+import 'package:objectbox/objectbox.dart';
+
+@Entity()
+class ${operation.pascal}Box {
+  ${operation.pascal}Box({
+    this.id = 0,
+  });
+
+  @Id()
+  int id;
+}
+''',
+      _ => '''
+class ${operation.pascal}Box {
+  const ${operation.pascal}Box({
+    this.id = 0,
+  });
+
+  final int id;
+}
+''',
+    },
   );
 }
 
@@ -166,12 +197,12 @@ GeneratedFile _remoteMapper(
       ? '''
 
   ${operation.pascal}Box toBox() {
-    return ${operation.pascal}Box(id: id);
+    return ${operation.pascal}Box(id: int.tryParse(id) ?? 0);
   }
 '''
       : '';
   final boxImport = kind == OperationKind.cached
-      ? "import '../local/boxes/${operation.snake}_box.dart';\n"
+      ? "import '../local/models/${operation.snake}_box.dart';\n"
       : '';
 
   return GeneratedFile(
@@ -201,11 +232,11 @@ GeneratedFile _localMapper(
           context.paths.data, 'mappers', '${operation.snake}_box_mapper.dart'),
       content: '''
 import '${_domainImport(context, 'entities/${operation.snake}_entity.dart')}';
-import '../local/boxes/${operation.snake}_box.dart';
+import '../local/models/${operation.snake}_box.dart';
 
 extension ${operation.pascal}BoxMapper on ${operation.pascal}Box {
   ${operation.pascal}Entity toEntity() {
-    return ${operation.pascal}Entity(id: id);
+    return ${operation.pascal}Entity(id: id.toString());
   }
 }
 ''',
@@ -217,11 +248,11 @@ extension ${operation.pascal}BoxMapper on ${operation.pascal}Box {
         p.join(context.paths.data, 'mappers', '${operation.snake}_mapper.dart'),
     content: '''
 import '${_domainImport(context, 'entities/${operation.snake}_entity.dart')}';
-import '../local/boxes/${operation.snake}_box.dart';
+import '../local/models/${operation.snake}_box.dart';
 
 extension ${operation.pascal}BoxMapper on ${operation.pascal}Box {
   ${operation.pascal}Entity toEntity() {
-    return ${operation.pascal}Entity(id: id);
+    return ${operation.pascal}Entity(id: id.toString());
   }
 }
 ''',

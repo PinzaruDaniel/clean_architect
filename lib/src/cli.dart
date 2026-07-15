@@ -67,9 +67,15 @@ class CleanArchitectCli {
         ..addFlag('skip-presentation', negatable: false)
         ..addFlag('flutter-create', negatable: true)
         ..addOption('platforms')
-        ..addOption('state', allowed: ['getx', 'none'])
+        ..addOption('state', allowed: ['getx', 'bloc', 'provider', 'none'])
         ..addOption('network', allowed: ['dio', 'abstract'])
-        ..addOption('storage', allowed: ['secure_storage', 'abstract'])
+        ..addOption('storage', allowed: [
+          'secure_storage',
+          'shared_preferences',
+          'hive',
+          'objectbox',
+          'abstract'
+        ])
         ..addOption(
           'dependency-injection',
           abbr: 'd',
@@ -336,6 +342,8 @@ class CleanArchitectCli {
   StateManagement? _stateOverride(String? value) {
     return switch (value) {
       'getx' => StateManagement.getx,
+      'bloc' => StateManagement.bloc,
+      'provider' => StateManagement.provider,
       'none' => StateManagement.none,
       _ => null,
     };
@@ -352,6 +360,9 @@ class CleanArchitectCli {
   LocalStorage? _storageOverride(String? value) {
     return switch (value) {
       'secure_storage' => LocalStorage.secureStorage,
+      'shared_preferences' => LocalStorage.sharedPreferences,
+      'hive' => LocalStorage.hive,
+      'objectbox' => LocalStorage.objectbox,
       'abstract' => LocalStorage.abstract,
       _ => null,
     };

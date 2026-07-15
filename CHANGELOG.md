@@ -1,3 +1,12 @@
+## 0.2.0
+
+- Renamed generated remote API service templates to remote data source templates.
+- Added Dio providers to injectable `data/lib/data_module.dart`.
+- Updated local/cached operation generation to patch `data_module.dart` with new box providers.
+- Added Bloc and Provider state management template support.
+- Added Hive and ObjectBox local storage options.
+- Added generated local box models and injectable `data/lib/data_module.dart` initialization for Hive and ObjectBox storage.
+
 ## 0.1.9
 
 - Added optional Flutter presentation bootstrap with `flutter.create_presentation`, `flutter.platforms`, `--flutter-create`, and `--platforms`.

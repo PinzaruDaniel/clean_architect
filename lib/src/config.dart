@@ -5,11 +5,17 @@ import 'package:yaml/yaml.dart';
 
 enum ProjectStructure { featureFirst, layeredPackages }
 
-enum StateManagement { getx, none }
+enum StateManagement { getx, bloc, provider, none }
 
 enum NetworkClient { dio, abstract }
 
-enum LocalStorage { secureStorage, sharedPreferences, abstract }
+enum LocalStorage {
+  secureStorage,
+  sharedPreferences,
+  hive,
+  objectbox,
+  abstract
+}
 
 enum DependencyInjection { manual, injectable }
 
@@ -166,9 +172,9 @@ class CleanArchitectConfig {
     return '''
 clean_architect:
   structure: layered_packages # layered_packages or feature_first
-  state_management: getx # getx or none
+  state_management: getx # getx, bloc, provider, or none
   network: dio # dio or abstract
-  local_storage: secure_storage # secure_storage or abstract
+  local_storage: secure_storage # secure_storage, shared_preferences, hive, objectbox, or abstract
   dependency_injection: manual # manual or injectable
   use_asset_generator: true
   use_either_failure: false
@@ -283,6 +289,8 @@ String _structureName(ProjectStructure structure) {
 String _stateName(StateManagement state) {
   return switch (state) {
     StateManagement.getx => 'getx',
+    StateManagement.bloc => 'bloc',
+    StateManagement.provider => 'provider',
     StateManagement.none => 'none',
   };
 }
@@ -298,6 +306,8 @@ String _storageName(LocalStorage storage) {
   return switch (storage) {
     LocalStorage.secureStorage => 'secure_storage',
     LocalStorage.sharedPreferences => 'shared_preferences',
+    LocalStorage.hive => 'hive',
+    LocalStorage.objectbox => 'objectbox',
     LocalStorage.abstract => 'abstract',
   };
 }

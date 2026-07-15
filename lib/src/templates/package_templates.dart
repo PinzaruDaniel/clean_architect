@@ -22,6 +22,7 @@ List<GeneratedFile> packageTemplates(
       content: _diPubspec(context),
     ),
     ..._injectableFiles(context),
+    ..._dataModuleFiles(context),
   ];
 
   if (includePresentation) {
@@ -90,6 +91,128 @@ include: package:flutter_lints/flutter.yaml
   }
 
   return files;
+}
+
+List<GeneratedFile> _dataModuleFiles(TemplateContext context) {
+  if (context.config.dependencyInjection != DependencyInjection.injectable) {
+    return const [];
+  }
+  if (context.config.network != NetworkClient.dio &&
+      context.config.localStorage != LocalStorage.hive &&
+      context.config.localStorage != LocalStorage.objectbox &&
+      context.config.localStorage != LocalStorage.sharedPreferences) {
+    return const [];
+  }
+
+  return [
+    GeneratedFile(
+      path: p.join(_packageRoot(context.paths.data), 'lib', 'data_module.dart'),
+      content: _dataModule(context),
+    ),
+  ];
+}
+
+String _dataModule(TemplateContext context) {
+  final imports = <String>[
+    "import 'package:injectable/injectable.dart';",
+    if (context.config.network == NetworkClient.dio)
+      "import 'package:dio/dio.dart';",
+    if (context.config.localStorage == LocalStorage.hive)
+      "import 'package:hive/hive.dart';",
+    if (context.config.localStorage == LocalStorage.hive)
+      "import 'package:hive_flutter/hive_flutter.dart';",
+    if (context.config.localStorage == LocalStorage.objectbox)
+      "import 'package:objectbox/objectbox.dart';",
+    if (context.config.localStorage == LocalStorage.objectbox)
+      "import 'package:path/path.dart' as p;",
+    if (context.config.localStorage == LocalStorage.objectbox)
+      "import 'package:path_provider/path_provider.dart';",
+    if (context.config.localStorage == LocalStorage.sharedPreferences)
+      "import 'package:shared_preferences/shared_preferences.dart';",
+    if (context.config.localStorage == LocalStorage.hive ||
+        context.config.localStorage == LocalStorage.objectbox)
+      "import 'features/${context.cases.snake}/local/models/${context.cases.snake}_box.dart';",
+    if (context.config.localStorage == LocalStorage.objectbox)
+      "import 'objectbox.g.dart';",
+  ];
+  final body = <String>[
+    if (context.config.network == NetworkClient.dio) _dioProviders(),
+    if (context.config.localStorage == LocalStorage.sharedPreferences)
+      _sharedPreferencesProvider(),
+    if (context.config.localStorage == LocalStorage.hive)
+      _hiveProviders(context),
+    if (context.config.localStorage == LocalStorage.objectbox)
+      _objectBoxProviders(context),
+  ].where((item) => item.trim().isNotEmpty).join('\n');
+
+  return '''
+${imports.toSet().join('\n')}
+
+@module
+abstract class DataModule {
+$body
+}
+''';
+}
+
+String _dioProviders() {
+  return '''
+  @Named('auth_dio')
+  @lazySingleton
+  Dio authDio() {
+    return Dio(BaseOptions(baseUrl: ''));
+  }
+
+  @Named('main_dio')
+  @lazySingleton
+  Dio mainDio() {
+    return Dio(BaseOptions(baseUrl: ''));
+  }
+''';
+}
+
+String _sharedPreferencesProvider() {
+  return '''
+  @lazySingleton
+  @preResolve
+  Future<SharedPreferences> sharedPreferences() {
+    return SharedPreferences.getInstance();
+  }
+''';
+}
+
+String _hiveProviders(TemplateContext context) {
+  final boxClass = '${context.cases.pascal}Box';
+  final boxName = '${context.cases.camel}Box';
+  return '''
+  @preResolve
+  Future<void> initHive() async {
+    await Hive.initFlutter();
+  }
+
+  @lazySingleton
+  @preResolve
+  Future<Box<$boxClass>> $boxName() {
+    return Hive.openBox<$boxClass>('${context.cases.snake}_box');
+  }
+''';
+}
+
+String _objectBoxProviders(TemplateContext context) {
+  final boxClass = '${context.cases.pascal}Box';
+  final boxName = '${context.cases.camel}Box';
+  return '''
+  @lazySingleton
+  @factoryMethod
+  @preResolve
+  Future<Store> asyncCreateStore() async {
+    final directory = await getApplicationDocumentsDirectory();
+    return openStore(directory: p.join(directory.path, 'objectbox'));
+  }
+
+  @lazySingleton
+  Box<$boxClass> $boxName(Store store) => Box<$boxClass>(store);
+''';
 }
 
 List<GeneratedFile> _injectableFiles(TemplateContext context) {
@@ -188,6 +311,21 @@ String _dataPubspec(TemplateContext context) {
     dependencies.insert(0, '  flutter:\n    sdk: flutter');
     dependencies.add('  flutter_secure_storage: ^9.2.2');
   }
+  if (context.config.localStorage == LocalStorage.sharedPreferences) {
+    dependencies.insert(0, '  flutter:\n    sdk: flutter');
+    dependencies.add('  shared_preferences: ^2.5.3');
+  }
+  if (context.config.localStorage == LocalStorage.hive) {
+    dependencies.insert(0, '  flutter:\n    sdk: flutter');
+    dependencies.add('  hive: ^2.2.3');
+    dependencies.add('  hive_flutter: ^1.1.0');
+  }
+  if (context.config.localStorage == LocalStorage.objectbox) {
+    dependencies.insert(0, '  flutter:\n    sdk: flutter');
+    dependencies.add('  objectbox: ^4.1.0');
+    dependencies.add('  objectbox_flutter_libs: ^4.1.0');
+    dependencies.add('  path_provider: ^2.1.5');
+  }
   if (context.config.models.useFreezed) {
     dependencies.add('  freezed: ^3.2.5');
     dependencies.add('  freezed_annotation: ^3.1.0');
@@ -213,6 +351,8 @@ dev_dependencies:
   retrofit_generator:
   json_serializable: ^6.14.0
   injectable_generator: 
+  objectbox_generator:
+  hive_generator:
 ''';
 }
 
@@ -263,6 +403,13 @@ String _presentationPubspec(TemplateContext context) {
 
   if (context.config.stateManagement == StateManagement.getx) {
     dependencies.add('  get: ^4.7.2');
+  }
+  if (context.config.stateManagement == StateManagement.bloc) {
+    dependencies.add('  flutter_bloc: ^9.1.1');
+    dependencies.add('  equatable: ^2.0.7');
+  }
+  if (context.config.stateManagement == StateManagement.provider) {
+    dependencies.add('  provider: ^6.1.5');
   }
   if (context.config.dependencyInjection == DependencyInjection.injectable) {
     dependencies.add('  get_it:');

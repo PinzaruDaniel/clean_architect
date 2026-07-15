@@ -1,6 +1,6 @@
 name: clean_architect
 description: A configurable CLI generator for clean architecture Flutter and Dart feature modules.
-version: 0.1.9
+version: 0.2.0
 repository: https://github.com/PinzaruDaniel/clean_architect
 
 environment:

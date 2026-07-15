@@ -1,10 +1,16 @@
 clean_architect:
   structure: layered_packages # layered_packages or feature_first
-  state_management: getx # getx or none
+  state_management: getx # getx, bloc, provider, or none
   network: dio # dio or abstract
-  local_storage: secure_storage # secure_storage or abstract
-  dependency_injection: manual # manual or injectable
+  local_storage: hive # secure_storage, shared_preferences, hive, objectbox, or abstract
+  dependency_injection: injectable # manual or injectable
   use_asset_generator: true
+  use_either_failure: false
+  flutter:
+    create_presentation: true
+    platforms:
+      - android
+      - ios
   models:
     use_freezed: true
     use_json_serializable: true

@@ -33,6 +33,7 @@ class OperationPatcher {
     }
     if (kind.includesLocal) {
       _patchLocalSource(paths.data, feature, operation, kind);
+      _patchDataModule(paths.data, operation);
     }
 
     _patchRepository(paths.domain, feature, operation, kind);
@@ -44,7 +45,7 @@ class OperationPatcher {
   void _patchRemoteSource(
       String dataPath, NameCases feature, NameCases operation) {
     final path =
-        p.join(dataPath, 'remote', '${feature.snake}_api_service.dart');
+        p.join(dataPath, 'remote', '${feature.snake}_remote_data_source.dart');
     final importLine = "import 'models/${operation.snake}_dto.dart';";
     final snippet = '''
 
@@ -60,13 +61,14 @@ import 'package:retrofit/retrofit.dart';
 
 $importLine
 
-part '${feature.snake}_api_service.g.dart';
+part '${feature.snake}_remote_data_source.g.dart';
 
 @lazySingleton
 @RestApi(baseUrl: '')
-abstract class ${feature.pascal}ApiService {
+abstract class ${feature.pascal}RemoteDataSource {
   @factoryMethod
-  factory ${feature.pascal}ApiService(@Named("main_dio") Dio dio) = _${feature.pascal}ApiService;$snippet}
+  factory ${feature.pascal}RemoteDataSource(@Named("main_dio") Dio dio) = _${feature.pascal}RemoteDataSource;
+$snippet}
 ''',
       imports: [importLine],
       duplicateNeedle: 'Future<${operation.pascal}Dto> ${operation.camel}()',
@@ -82,7 +84,7 @@ abstract class ${feature.pascal}ApiService {
   ) {
     final path =
         p.join(dataPath, 'local', '${feature.snake}_local_data_source.dart');
-    final importLine = "import 'boxes/${operation.snake}_box.dart';";
+    final importLine = "import 'models/${operation.snake}_box.dart';";
     final methodName = kind == OperationKind.cached
         ? '${operation.camel}Cache'
         : operation.camel;
@@ -95,7 +97,7 @@ abstract class ${feature.pascal}ApiService {
   @override
   Future<${operation.pascal}Box> $methodName() async {
     // TODO: Read ${operation.title.toLowerCase()} from local storage.
-    return const ${operation.pascal}Box(id: '');
+    return const ${operation.pascal}Box();
   }
 ''';
 
@@ -133,6 +135,109 @@ class ${feature.pascal}LocalDataSourceImpl implements ${feature.pascal}LocalData
       implSnippet,
     );
     _write(path, content);
+  }
+
+  void _patchDataModule(String dataPath, NameCases operation) {
+    if (config.dependencyInjection != DependencyInjection.injectable) return;
+    if (config.localStorage != LocalStorage.hive &&
+        config.localStorage != LocalStorage.objectbox) {
+      return;
+    }
+
+    final path = p.join(_packageRoot(dataPath), 'lib', 'data_module.dart');
+    final importLine =
+        "import 'features/${_featureNameFromDataPath(dataPath)}/local/models/${operation.snake}_box.dart';";
+    final methodName = '${operation.camel}Box';
+    final boxClass = '${operation.pascal}Box';
+    final snippet = config.localStorage == LocalStorage.hive
+        ? '''
+  @lazySingleton
+  @preResolve
+  Future<Box<$boxClass>> $methodName() {
+    return Hive.openBox<$boxClass>('${operation.snake}_box');
+  }
+'''
+        : '''
+  @lazySingleton
+  Box<$boxClass> $methodName(Store store) => Box<$boxClass>(store);
+''';
+
+    final file = File(path);
+    if (!file.existsSync()) {
+      _write(path, _createDataModule(importLine, snippet));
+      return;
+    }
+
+    var content = file.readAsStringSync();
+    if (content.contains(' $methodName(')) {
+      logger.warn('skip $path already contains $methodName');
+      return;
+    }
+
+    content = _ensureImports(content, [importLine]);
+    content =
+        _insertBeforeClassEnd(content, 'abstract class DataModule', snippet);
+    _write(path, content);
+  }
+
+  String _createDataModule(String featureImport, String boxSnippet) {
+    final imports = <String>[
+      "import 'package:injectable/injectable.dart';",
+      if (config.network == NetworkClient.dio) "import 'package:dio/dio.dart';",
+      if (config.localStorage == LocalStorage.hive)
+        "import 'package:hive/hive.dart';",
+      if (config.localStorage == LocalStorage.hive)
+        "import 'package:hive_flutter/hive_flutter.dart';",
+      if (config.localStorage == LocalStorage.objectbox)
+        "import 'package:objectbox/objectbox.dart';",
+      if (config.localStorage == LocalStorage.objectbox)
+        "import 'package:path/path.dart' as p;",
+      if (config.localStorage == LocalStorage.objectbox)
+        "import 'package:path_provider/path_provider.dart';",
+      featureImport,
+      if (config.localStorage == LocalStorage.objectbox)
+        "import 'objectbox.g.dart';",
+    ];
+    final dio = config.network == NetworkClient.dio
+        ? '''
+  @Named('auth_dio')
+  @lazySingleton
+  Dio authDio() {
+    return Dio(BaseOptions(baseUrl: ''));
+  }
+
+  @Named('main_dio')
+  @lazySingleton
+  Dio mainDio() {
+    return Dio(BaseOptions(baseUrl: ''));
+  }
+'''
+        : '';
+    final init = config.localStorage == LocalStorage.hive
+        ? '''
+  @preResolve
+  Future<void> initHive() async {
+    await Hive.initFlutter();
+  }
+'''
+        : '''
+  @lazySingleton
+  @factoryMethod
+  @preResolve
+  Future<Store> asyncCreateStore() async {
+    final directory = await getApplicationDocumentsDirectory();
+    return openStore(directory: p.join(directory.path, 'objectbox'));
+  }
+''';
+
+    return '''
+${imports.toSet().join('\n')}
+
+@module
+abstract class DataModule {
+$dio$init$boxSnippet
+}
+''';
   }
 
   void _patchRepository(
@@ -189,7 +294,7 @@ abstract interface class ${feature.pascal}Repository {$methods}
       if (kind == OperationKind.cached)
         "import '../mappers/${operation.snake}_box_mapper.dart';",
       if (kind.includesRemote)
-        "import '../remote/${feature.snake}_api_service.dart';",
+        "import '../remote/${feature.snake}_remote_data_source.dart';",
       if (kind.includesLocal)
         "import '../local/${feature.snake}_local_data_source.dart';",
     ];
@@ -202,12 +307,12 @@ ${imports.toSet().join('\n')}
 
 class ${feature.pascal}RepositoryImpl implements ${feature.pascal}Repository {
   const ${feature.pascal}RepositoryImpl({
-    ${kind.includesRemote ? 'required ${feature.pascal}ApiService apiService,' : ''}
+    ${kind.includesRemote ? 'required ${feature.pascal}RemoteDataSource remoteDataSource,' : ''}
     ${kind.includesLocal ? 'required ${feature.pascal}LocalDataSource localDataSource,' : ''}
-  })  ${kind.includesRemote ? ': _apiService = apiService' : ''}${kind.includesRemote && kind.includesLocal ? ',' : ''}
+  })  ${kind.includesRemote ? ': _remoteDataSource = remoteDataSource' : ''}${kind.includesRemote && kind.includesLocal ? ',' : ''}
         ${kind.includesLocal ? '_localDataSource = localDataSource' : ''};
 
-  ${kind.includesRemote ? 'final ${feature.pascal}ApiService _apiService;' : ''}
+  ${kind.includesRemote ? 'final ${feature.pascal}RemoteDataSource _remoteDataSource;' : ''}
   ${kind.includesLocal ? 'final ${feature.pascal}LocalDataSource _localDataSource;' : ''}$methods}
 ''',
       imports: imports,
@@ -303,7 +408,7 @@ $fields$methods}
 
   @override
   $returnType $methodName() async {
-${_wrapReturn('final dto = await _apiService.${operation.camel}();', 'dto.toEntity()')}
+${_wrapReturn('final dto = await _remoteDataSource.${operation.camel}();', 'dto.toEntity()')}
   }
 ''');
     }
@@ -444,6 +549,18 @@ class _UseCaseInfo {
   final String className;
   final String fieldName;
   final String methodName;
+}
+
+String _packageRoot(String libPath) {
+  final parts = p.split(p.normalize(libPath));
+  final libIndex = parts.indexOf('lib');
+  if (libIndex == -1) return libPath;
+  return p.joinAll(parts.take(libIndex));
+}
+
+String _featureNameFromDataPath(String dataPath) {
+  final parts = p.split(p.normalize(dataPath));
+  return parts.isEmpty ? 'feature' : parts.last;
 }
 
 String _packageImport(String basePath, String path) {

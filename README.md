@@ -75,10 +75,15 @@ clean_architect create auth --force
 clean_architect create feature profile --skip-presentation
 
 clean_architect create auth --state getx
+clean_architect create auth --state bloc
+clean_architect create auth --state provider
 clean_architect create auth --state none
 clean_architect create auth --network dio
 clean_architect create auth --network abstract
 clean_architect create auth --storage secure_storage
+clean_architect create auth --storage shared_preferences
+clean_architect create auth --storage hive
+clean_architect create auth --storage objectbox
 clean_architect create auth --storage abstract
 clean_architect create auth --di injectable
 clean_architect create auth --dependency-injection manual
@@ -103,9 +108,9 @@ This creates `clean_architect.yaml`:
 ```yaml
 clean_architect:
   structure: layered_packages # layered_packages or feature_first
-  state_management: getx # getx or none
+  state_management: getx # getx, bloc, provider, or none
   network: dio # dio or abstract
-  local_storage: secure_storage # secure_storage or abstract
+  local_storage: secure_storage # secure_storage, shared_preferences, hive, objectbox, or abstract
   dependency_injection: manual # manual or injectable
   use_asset_generator: true
   use_either_failure: false
@@ -129,9 +134,9 @@ clean_architect:
 | Key | Values | Default | What it controls |
 | --- | --- | --- | --- |
 | `structure` | `layered_packages`, `feature_first` | `layered_packages` | How feature paths are resolved from the configured layer paths. |
-| `state_management` | `getx`, `none` | `getx` | Presentation controller/page style. |
+| `state_management` | `getx`, `bloc`, `provider`, `none` | `getx` | Presentation controller/page style. |
 | `network` | `dio`, `abstract` | `dio` | Remote data source style and generated data dependencies. |
-| `local_storage` | `secure_storage`, `abstract` | `secure_storage` | Local auth credential storage style. |
+| `local_storage` | `secure_storage`, `shared_preferences`, `hive`, `objectbox`, `abstract` | `secure_storage` | Local auth credential storage style and generated storage dependencies. |
 | `dependency_injection` | `manual`, `injectable` | `manual` | Manual DI builder files or injectable/get_it setup files and annotations. |
 | `use_asset_generator` | `true`, `false` | `true` | Whether presentation gets `asset_generator_kit.yaml` and the asset generator dependency. |
 | `use_either_failure` | `true`, `false` | `false` | Whether generated repositories, repository implementations, and use cases return `Future<Either<Failure, T>>`. |
@@ -144,7 +149,7 @@ clean_architect:
 | `paths.presentation` | path | `presentation/lib` | Presentation layer root. |
 | `paths.di` | path | `di/lib` | Dependency injection layer root. |
 
-The config parser also recognizes `local_storage: shared_preferences`, but the current templates only generate concrete storage code for `secure_storage`; use `abstract` when you want to wire your own storage implementation.
+Use `abstract` when you want the source boundaries without a concrete local storage package.
 
 CLI overrides are intentionally small and only affect the current command. They do not rewrite `clean_architect.yaml`.
 
@@ -197,7 +202,7 @@ my_app/
 Every layer gets its own `pubspec.yaml`:
 
 - `domain` is a pure Dart package for entities, repository contracts, and use cases.
-- `data` is a Dart/Flutter package for DTOs, API services, local sources, mappers, and repository implementations.
+- `data` is a Dart/Flutter package for DTOs, remote data sources, local sources, mappers, and repository implementations.
 - `di` is a Dart package that connects `domain` and `data` dependencies.
 - `presentation` is a runnable Flutter package with `main.dart`, Flutter dependencies, and UI folders.
 
@@ -359,8 +364,8 @@ Data:
 
 ```txt
 data/lib/features/orders/remote/models/orders_dto.dart
-data/lib/features/orders/remote/orders_api_service.dart
-data/lib/features/orders/local/models/.gitkeep
+data/lib/features/orders/remote/orders_remote_data_source.dart
+data/lib/features/orders/local/models/orders_box.dart
 data/lib/features/orders/local/orders_local_data_source.dart
 data/lib/features/orders/mappers/orders_mapper.dart
 data/lib/features/orders/repositories/orders_repository_impl.dart
@@ -374,7 +379,7 @@ presentation/lib/pages/orders_page.dart
 presentation/lib/widgets/orders_view_item.dart
 ```
 
-The generic feature is intentionally minimal: entity, DTO, mapper, repository contract, repository implementation, list use case, local source, Retrofit API service, controller, page, and view item.
+The generic feature is intentionally minimal: entity, DTO, mapper, repository contract, repository implementation, list use case, local source, Retrofit remote data source, controller, page, and view item.
 
 ## `create auth`
 
@@ -402,8 +407,8 @@ Data:
 ```txt
 data/lib/features/auth/remote/models/auth_token_dto.dart
 data/lib/features/auth/remote/models/login_request_dto.dart
-data/lib/features/auth/remote/auth_api_service.dart
-data/lib/features/auth/local/models/.gitkeep
+data/lib/features/auth/remote/auth_remote_data_source.dart
+data/lib/features/auth/local/models/auth_box.dart
 data/lib/features/auth/local/auth_local_data_source.dart
 data/lib/features/auth/mappers/auth_token_mapper.dart
 data/lib/features/auth/repositories/auth_repository_impl.dart
@@ -417,14 +422,14 @@ presentation/lib/pages/login_page.dart
 presentation/lib/widgets/login_view_item.dart
 ```
 
-The generated remote API service uses Dio + Retrofit style:
+The generated remote remote data source uses Dio + Retrofit style:
 
 ```dart
 @lazySingleton
 @RestApi(baseUrl: '')
-abstract class AuthApiService {
+abstract class AuthRemoteDataSource {
   @factoryMethod
-  factory AuthApiService(@Named("auth_dio") Dio dio) = _AuthApiService;
+  factory AuthRemoteDataSource(@Named("auth_dio") Dio dio) = _AuthRemoteDataSource;
 
   @POST('/authorization/token/')
   Future<AuthTokenDto> login(@Body() Map<String, dynamic> body);
@@ -457,7 +462,7 @@ data/lib/features/orders/mappers/load_details_mapper.dart
 Patches:
 
 ```txt
-data/lib/features/orders/remote/orders_api_service.dart
+data/lib/features/orders/remote/orders_remote_data_source.dart
 domain/lib/features/orders/repositories/orders_repository.dart
 data/lib/features/orders/repositories/orders_repository_impl.dart
 presentation/lib/controllers/orders_controller.dart
@@ -476,7 +481,7 @@ Adds:
 ```txt
 domain/lib/features/orders/entities/read_draft_entity.dart
 domain/lib/features/orders/usecases/read_draft_use_case.dart
-data/lib/features/orders/local/boxes/read_draft_box.dart
+data/lib/features/orders/local/models/read_draft_box.dart
 data/lib/features/orders/mappers/read_draft_mapper.dart
 ```
 
@@ -497,7 +502,7 @@ domain/lib/features/orders/entities/sync_details_entity.dart
 domain/lib/features/orders/usecases/sync_details_remote_use_case.dart
 domain/lib/features/orders/usecases/sync_details_cache_use_case.dart
 data/lib/features/orders/remote/models/sync_details_dto.dart
-data/lib/features/orders/local/boxes/sync_details_box.dart
+data/lib/features/orders/local/models/sync_details_box.dart
 data/lib/features/orders/mappers/sync_details_mapper.dart
 data/lib/features/orders/mappers/sync_details_box_mapper.dart
 ```
@@ -595,13 +600,29 @@ state_management: getx
 
 Presentation controllers extend `GetxController`, pages use `Get.put(...)`, `Get.find(...)`, and reactive values where needed.
 
+### Bloc
+
+```yaml
+state_management: bloc
+```
+
+Presentation controllers use `flutter_bloc` with event/state classes, and pages use `BlocProvider`/`BlocBuilder`.
+
+### Provider
+
+```yaml
+state_management: provider
+```
+
+Presentation controllers extend `ChangeNotifier`, and pages use `ChangeNotifierProvider`/`Consumer`.
+
 ### None
 
 ```yaml
 state_management: none
 ```
 
-Presentation files are generated without GetX page wiring. This is useful when you want to connect Bloc, Riverpod, Provider, or another state system manually.
+Presentation files are generated without state management package wiring. This is useful when you want to connect another state system manually.
 
 ## Network
 
@@ -631,13 +652,39 @@ local_storage: secure_storage
 
 Auth local source uses `flutter_secure_storage` for credential persistence.
 
+### Hive
+
+```yaml
+local_storage: hive
+```
+
+The data package gets Hive dependencies, local sources can initialize their box, and injectable projects get a generated module:
+
+```txt
+data/lib/data_module.dart
+```
+
+### ObjectBox
+
+```yaml
+local_storage: objectbox
+```
+
+The data package gets ObjectBox dependencies, local sources can initialize their box from a Store, and injectable projects get a generated module:
+
+```txt
+data/lib/data_module.dart
+```
+
+Run build runner in the data package after adding ObjectBox entities so `objectbox.g.dart` can be generated.
+
 ### Abstract
 
 ```yaml
 local_storage: abstract
 ```
 
-Auth local source contains TODO methods so you can wire Hive, shared preferences, a database, encrypted storage, or another persistence mechanism yourself.
+Auth local source contains TODO methods so you can wire a custom persistence mechanism yourself.
 
 ## Presentation Package
 

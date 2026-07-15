@@ -43,13 +43,14 @@ List<GeneratedFile> featureTemplates(TemplateContext context) {
       path: p.join(
         context.paths.data,
         'remote',
-        '${feature.snake}_api_service.dart',
+        '${feature.snake}_remote_data_source.dart',
       ),
-      content: _apiService(context),
+      content: _remoteDataSource(context),
     ),
     GeneratedFile(
-      path: p.join(context.paths.data, 'local', 'models', '.gitkeep'),
-      content: '',
+      path: p.join(
+          context.paths.data, 'local', 'models', '${feature.snake}_box.dart'),
+      content: _localBox(context),
     ),
     GeneratedFile(
       path: p.join(
@@ -57,23 +58,7 @@ List<GeneratedFile> featureTemplates(TemplateContext context) {
         'local',
         '${feature.snake}_local_data_source.dart',
       ),
-      content: '''
-import 'package:injectable/injectable.dart';
-
-abstract class ${feature.pascal}LocalDataSource {
-  Future<void> cacheItems(List<Object> items);
-}
-
-@LazySingleton(as: ${feature.pascal}LocalDataSource)
-class ${feature.pascal}LocalDataSourceImpl implements ${feature.pascal}LocalDataSource {
-  const ${feature.pascal}LocalDataSourceImpl();
-
-  @override
-  Future<void> cacheItems(List<Object> items) async {
-    // TODO: Cache ${feature.title.toLowerCase()} items.
-  }
-}
-''',
+      content: _localSource(context),
     ),
     GeneratedFile(
       path: p.join(
@@ -139,6 +124,135 @@ ${_lazySingletonAnnotation(context)}class Get${feature.pascal}ListUseCase {
 
   ${_returnType(context, 'List<${feature.pascal}Entity>')} call() {
     return _repository.get${feature.pascal}List();
+  }
+}
+''';
+}
+
+String _localBox(TemplateContext context) {
+  final feature = context.cases;
+  return switch (context.config.localStorage) {
+    LocalStorage.hive => '''
+import 'package:hive/hive.dart';
+
+part '${feature.snake}_box.g.dart';
+
+@HiveType(typeId: 0)
+class ${feature.pascal}Box extends HiveObject {
+  ${feature.pascal}Box({
+    this.id = 0,
+  });
+
+  @HiveField(0)
+  int id;
+}
+''',
+    LocalStorage.objectbox => '''
+import 'package:objectbox/objectbox.dart';
+
+@Entity()
+class ${feature.pascal}Box {
+  ${feature.pascal}Box({
+    this.id = 0,
+  });
+
+  @Id()
+  int id;
+}
+''',
+    _ => '''
+class ${feature.pascal}Box {
+  const ${feature.pascal}Box({
+    this.id = 0,
+  });
+
+  final int id;
+}
+''',
+  };
+}
+
+String _localSource(TemplateContext context) {
+  final feature = context.cases;
+  final annotation =
+      _lazySingletonAsAnnotation(context, '${feature.pascal}LocalDataSource');
+  if (context.config.localStorage == LocalStorage.hive) {
+    return '''
+${_injectableImport(context)}import 'package:hive/hive.dart';
+
+import 'models/${feature.snake}_box.dart';
+
+abstract class ${feature.pascal}LocalDataSource {
+  Future<void> cacheItems(List<Object> items);
+}
+
+$annotation
+class ${feature.pascal}LocalDataSourceImpl implements ${feature.pascal}LocalDataSource {
+  const ${feature.pascal}LocalDataSourceImpl(this._box);
+
+  final Box<${feature.pascal}Box> _box;
+
+  static Future<${feature.pascal}LocalDataSource> init() async {
+    final box = await Hive.openBox<${feature.pascal}Box>('${feature.snake}_box');
+    return ${feature.pascal}LocalDataSourceImpl(box);
+  }
+
+  @override
+  Future<void> cacheItems(List<Object> items) async {
+    // TODO: Convert ${feature.title.toLowerCase()} items to ${feature.pascal}Box and cache them.
+  }
+}
+''';
+  }
+
+  if (context.config.localStorage == LocalStorage.objectbox) {
+    return '''
+${_injectableImport(context)}import 'package:objectbox/objectbox.dart';
+
+import 'models/${feature.snake}_box.dart';
+
+abstract class ${feature.pascal}LocalDataSource {
+  Future<void> cacheItems(List<Object> items);
+}
+
+$annotation
+class ${feature.pascal}LocalDataSourceImpl implements ${feature.pascal}LocalDataSource {
+  const ${feature.pascal}LocalDataSourceImpl(this._box);
+
+  final Box<${feature.pascal}Box> _box;
+
+  static ${feature.pascal}LocalDataSource init(Store store) {
+    return ${feature.pascal}LocalDataSourceImpl(Box<${feature.pascal}Box>(store));
+  }
+
+  @override
+  Future<void> cacheItems(List<Object> items) async {
+    // TODO: Convert ${feature.title.toLowerCase()} items to ${feature.pascal}Box and cache them.
+  }
+}
+''';
+  }
+
+  return '''
+${_injectableImport(context)}import 'models/${feature.snake}_box.dart';
+
+abstract class ${feature.pascal}LocalDataSource {
+  Future<void> cacheItems(List<Object> items);
+}
+
+$annotation
+class ${feature.pascal}LocalDataSourceImpl implements ${feature.pascal}LocalDataSource {
+  const ${feature.pascal}LocalDataSourceImpl();
+
+  static Future<${feature.pascal}LocalDataSource> init() async {
+    return const ${feature.pascal}LocalDataSourceImpl();
+  }
+
+  @override
+  Future<void> cacheItems(List<Object> items) async {
+    final placeholder = const ${feature.pascal}Box();
+    // TODO: Cache ${feature.title.toLowerCase()} items using your local storage. Remove placeholder when implemented.
+    placeholder.id;
   }
 }
 ''';
@@ -254,7 +368,7 @@ extension ${feature.pascal}DtoMapper on ${feature.pascal}Dto {
 ''';
 }
 
-String _apiService(TemplateContext context) {
+String _remoteDataSource(TemplateContext context) {
   final feature = context.cases;
   return '''
 import 'package:dio/dio.dart';
@@ -263,13 +377,13 @@ import 'package:retrofit/retrofit.dart';
 
 import 'models/${feature.snake}_dto.dart';
 
-part '${feature.snake}_api_service.g.dart';
+part '${feature.snake}_remote_data_source.g.dart';
 
 @lazySingleton
 @RestApi(baseUrl: '')
-abstract class ${feature.pascal}ApiService {
+abstract class ${feature.pascal}RemoteDataSource {
   @factoryMethod
-  factory ${feature.pascal}ApiService(@Named("main_dio") Dio dio) = _${feature.pascal}ApiService;
+  factory ${feature.pascal}RemoteDataSource(@Named("main_dio") Dio dio) = _${feature.pascal}RemoteDataSource;
 
   @GET('/${feature.snake}')
   Future<List<${feature.pascal}Dto>> getItems();
@@ -293,13 +407,13 @@ String _repositoryImpl(TemplateContext context) {
       : '';
   final body = context.config.useEitherFailure
       ? '''try {
-      final items = await _apiService.getItems();
+      final items = await _remoteDataSource.getItems();
       await _localDataSource.cacheItems(items);
       return right(items.map((item) => item.toEntity()).toList(growable: false));
     } catch (error) {
       return left(Failure(error.toString()));
     }'''
-      : '''final items = await _apiService.getItems();
+      : '''final items = await _remoteDataSource.getItems();
     await _localDataSource.cacheItems(items);
     return items.map((item) => item.toEntity()).toList(growable: false);''';
 
@@ -308,16 +422,16 @@ ${_injectableImport(context)}${eitherImport}import '$entityImport';
 import '$repositoryImport';
 import '../mappers/${feature.snake}_mapper.dart';
 import '../local/${feature.snake}_local_data_source.dart';
-import '../remote/${feature.snake}_api_service.dart';
+import '../remote/${feature.snake}_remote_data_source.dart';
 
 ${_lazySingletonAnnotation(context)}class ${feature.pascal}RepositoryImpl implements ${feature.pascal}Repository {
   const ${feature.pascal}RepositoryImpl({
-    required ${feature.pascal}ApiService apiService,
+    required ${feature.pascal}RemoteDataSource remoteDataSource,
     required ${feature.pascal}LocalDataSource localDataSource,
-  })  : _apiService = apiService,
+  })  : _remoteDataSource = remoteDataSource,
         _localDataSource = localDataSource;
 
-  final ${feature.pascal}ApiService _apiService;
+  final ${feature.pascal}RemoteDataSource _remoteDataSource;
   final ${feature.pascal}LocalDataSource _localDataSource;
 
   @override
@@ -342,7 +456,7 @@ GeneratedFile _di(TemplateContext context) {
     content: '''
 import '${_dataImport(context, 'repositories/${feature.snake}_repository_impl.dart')}';
 import '${_dataImport(context, 'local/${feature.snake}_local_data_source.dart')}';
-import '${_dataImport(context, 'remote/${feature.snake}_api_service.dart')}';
+import '${_dataImport(context, 'remote/${feature.snake}_remote_data_source.dart')}';
 import '${_domainImport(context, 'repositories/${feature.snake}_repository.dart')}';
 import '${_domainImport(context, 'usecases/get_${feature.snake}_list_use_case.dart')}';
 
@@ -357,11 +471,11 @@ class ${feature.pascal}Dependencies {
 }
 
 ${feature.pascal}Dependencies build${feature.pascal}Dependencies({
-  required ${feature.pascal}ApiService apiService,
+  required ${feature.pascal}RemoteDataSource remoteDataSource,
   required ${feature.pascal}LocalDataSource localDataSource,
 }) {
   final repository = ${feature.pascal}RepositoryImpl(
-    apiService: apiService,
+    remoteDataSource: remoteDataSource,
     localDataSource: localDataSource,
   );
 
@@ -406,6 +520,106 @@ class ${feature.pascal}ViewItem {
 
 String _controller(TemplateContext context) {
   final feature = context.cases;
+
+  if (context.config.stateManagement == StateManagement.bloc) {
+    return '''
+import 'package:equatable/equatable.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:get_it/get_it.dart';
+
+import '${_domainPresentationImport(context, 'usecases/get_${feature.snake}_list_use_case.dart')}';
+import '../widgets/${feature.snake}_view_item.dart';
+
+sealed class ${feature.pascal}Event extends Equatable {
+  const ${feature.pascal}Event();
+
+  @override
+  List<Object?> get props => [];
+}
+
+class ${feature.pascal}Requested extends ${feature.pascal}Event {
+  const ${feature.pascal}Requested();
+}
+
+class ${feature.pascal}State extends Equatable {
+  const ${feature.pascal}State({
+    this.items = const <${feature.pascal}ViewItem>[],
+    this.isLoading = false,
+  });
+
+  final List<${feature.pascal}ViewItem> items;
+  final bool isLoading;
+
+  ${feature.pascal}State copyWith({
+    List<${feature.pascal}ViewItem>? items,
+    bool? isLoading,
+  }) {
+    return ${feature.pascal}State(
+      items: items ?? this.items,
+      isLoading: isLoading ?? this.isLoading,
+    );
+  }
+
+  @override
+  List<Object?> get props => [items, isLoading];
+}
+
+class ${feature.pascal}Controller extends Bloc<${feature.pascal}Event, ${feature.pascal}State> {
+  ${feature.pascal}Controller()
+      : _get${feature.pascal}ListUseCase = GetIt.instance.get<Get${feature.pascal}ListUseCase>(),
+        super(const ${feature.pascal}State()) {
+    on<${feature.pascal}Requested>(_onRequested);
+  }
+
+  final Get${feature.pascal}ListUseCase _get${feature.pascal}ListUseCase;
+
+  Future<void> _onRequested(
+    ${feature.pascal}Requested event,
+    Emitter<${feature.pascal}State> emit,
+  ) async {
+    emit(state.copyWith(isLoading: true));
+    final entities = await _get${feature.pascal}ListUseCase();
+    emit(
+      state.copyWith(
+        isLoading: false,
+        items: entities
+            .map((entity) => ${feature.pascal}ViewItem(id: entity.id))
+            .toList(growable: false),
+      ),
+    );
+  }
+}
+''';
+  }
+
+  if (context.config.stateManagement == StateManagement.provider) {
+    return '''
+import 'package:flutter/foundation.dart';
+import 'package:get_it/get_it.dart';
+
+import '${_domainPresentationImport(context, 'usecases/get_${feature.snake}_list_use_case.dart')}';
+import '../widgets/${feature.snake}_view_item.dart';
+
+class ${feature.pascal}Controller extends ChangeNotifier {
+  var _get${feature.pascal}ListUseCase = GetIt.instance.get<Get${feature.pascal}ListUseCase>();
+
+  var items = const <${feature.pascal}ViewItem>[];
+  var isLoading = false;
+
+  Future<void> load() async {
+    isLoading = true;
+    notifyListeners();
+    final entities = await _get${feature.pascal}ListUseCase();
+    items = entities
+        .map((entity) => ${feature.pascal}ViewItem(id: entity.id))
+        .toList(growable: false);
+    isLoading = false;
+    notifyListeners();
+  }
+}
+''';
+  }
+
   final getxImport = context.config.stateManagement == StateManagement.getx
       ? "import 'package:get/get.dart';\n"
       : '';
@@ -436,12 +650,73 @@ class ${feature.pascal}Controller$baseClass {
 
 String _page(TemplateContext context) {
   final feature = context.cases;
+  if (context.config.stateManagement == StateManagement.bloc) {
+    return '''
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../controllers/${feature.snake}_controller.dart';
+
+class ${feature.pascal}Page extends StatelessWidget {
+  const ${feature.pascal}Page({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) => ${feature.pascal}Controller()..add(const ${feature.pascal}Requested()),
+      child: Scaffold(
+        appBar: AppBar(title: const Text('${feature.title}')),
+        body: BlocBuilder<${feature.pascal}Controller, ${feature.pascal}State>(
+          builder: (context, state) {
+            if (state.isLoading) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            return const Center(child: Text('${feature.title}'));
+          },
+        ),
+      ),
+    );
+  }
+}
+''';
+  }
+
+  if (context.config.stateManagement == StateManagement.provider) {
+    return '''
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../controllers/${feature.snake}_controller.dart';
+
+class ${feature.pascal}Page extends StatelessWidget {
+  const ${feature.pascal}Page({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => ${feature.pascal}Controller()..load(),
+      child: Scaffold(
+        appBar: AppBar(title: const Text('${feature.title}')),
+        body: Consumer<${feature.pascal}Controller>(
+          builder: (context, controller, child) {
+            if (controller.isLoading) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            return const Center(child: Text('${feature.title}'));
+          },
+        ),
+      ),
+    );
+  }
+}
+''';
+  }
+
   if (context.config.stateManagement == StateManagement.getx) {
     return '''
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '${_domainPresentationImport(context, 'usecases/get_${feature.snake}_list_use_case.dart')}';
 import '../controllers/${feature.snake}_controller.dart';
 
 class ${feature.pascal}Page extends StatefulWidget {
@@ -488,6 +763,12 @@ class ${feature.pascal}Page extends StatelessWidget {
   }
 }
 ''';
+}
+
+String _lazySingletonAsAnnotation(TemplateContext context, String typeName) {
+  return context.config.dependencyInjection == DependencyInjection.injectable
+      ? '@LazySingleton(as: $typeName)'
+      : '';
 }
 
 String _returnType(TemplateContext context, String valueType) {
