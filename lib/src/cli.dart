@@ -4,6 +4,7 @@ import 'package:args/args.dart';
 import 'package:mason_logger/mason_logger.dart';
 import 'package:path/path.dart' as p;
 
+import 'case_utils.dart';
 import 'config.dart';
 import 'file_writer.dart';
 import 'generator.dart';
@@ -141,6 +142,12 @@ class CleanArchitectCli {
       overwrite: results['overwrite'] == true || results['force'] == true,
     );
     writer.writeAll(files);
+
+    _patchFeatureDataModuleIfNeeded(
+      args,
+      config,
+      dryRun: results['dry-run'] == true,
+    );
 
     if (_shouldRunFlutterCreate(
       args,
@@ -289,6 +296,136 @@ class CleanArchitectCli {
       'architecture' || 'base' || 'auth' || 'feature' => true,
       _ => false,
     };
+  }
+
+  void _patchFeatureDataModuleIfNeeded(
+    List<String> args,
+    CleanArchitectConfig config, {
+    required bool dryRun,
+  }) {
+    if (args.isEmpty) return;
+    if (config.dependencyInjection != DependencyInjection.injectable) return;
+    if (config.localStorage != LocalStorage.hive &&
+        config.localStorage != LocalStorage.objectbox) {
+      return;
+    }
+
+    final featureName = switch (args.first) {
+      'auth' => 'auth',
+      'feature' when args.length >= 2 => args[1],
+      'architecture' || 'base' => 'base_feature',
+      _ => null,
+    };
+    if (featureName == null || featureName.isEmpty) return;
+
+    final feature = NameCases(featureName);
+    final dataRoot = _packageRoot(config.paths.data);
+    final dataLib = p.join(dataRoot, 'lib');
+    final modulePath = p.join(dataLib, 'data_module.dart');
+    final moduleFile = File(modulePath);
+    if (!moduleFile.existsSync()) return;
+
+    final boxClass = '${feature.pascal}Box';
+    final methodName = '${feature.camel}Box';
+    var content = moduleFile.readAsStringSync();
+    if (content.contains(' $methodName(')) return;
+
+    final featureDataPath = p.join(config.paths.data, feature.snake);
+    final boxPath = p.join(
+      featureDataPath,
+      'local',
+      'models',
+      '${feature.snake}_box.dart',
+    );
+    final boxImportPath =
+        p.relative(boxPath, from: dataLib).split(p.separator).join('/');
+
+    final imports = <String>[
+      if (config.localStorage == LocalStorage.hive)
+        "import 'package:hive/hive.dart';",
+      if (config.localStorage == LocalStorage.objectbox)
+        "import 'package:objectbox/objectbox.dart';",
+      "import '$boxImportPath';",
+    ];
+    final snippet = config.localStorage == LocalStorage.hive
+        ? '''
+  @lazySingleton
+  @preResolve
+  Future<Box<$boxClass>> $methodName() {
+    return Hive.openBox<$boxClass>('${feature.snake}_box');
+  }
+'''
+        : '''
+  @lazySingleton
+  Box<$boxClass> $methodName(Store store) => Box<$boxClass>(store);
+''';
+
+    if (dryRun) {
+      _logger.info('update $modulePath');
+      return;
+    }
+
+    content = _ensureImports(content, imports);
+    content = _insertBeforeClassEnd(
+      content,
+      'abstract class DataModule',
+      snippet,
+    );
+    moduleFile.writeAsStringSync(_withTrailingNewline(content));
+    _logger.success('updated $modulePath');
+  }
+
+  String _ensureImports(String content, List<String> imports) {
+    var result = content;
+    for (final import in imports.toSet()) {
+      if (result.contains(import)) continue;
+      final lastImport = RegExp(r'''import '[^']+';|import "[^"]+";''')
+          .allMatches(result)
+          .lastOrNull;
+      if (lastImport == null) {
+        result = '$import\n\n$result';
+      } else {
+        result = result.replaceRange(
+          lastImport.end,
+          lastImport.end,
+          '\n$import',
+        );
+      }
+    }
+    return result;
+  }
+
+  String _insertBeforeClassEnd(
+    String content,
+    String classNeedle,
+    String snippet,
+  ) {
+    final classIndex = content.indexOf(classNeedle);
+    if (classIndex == -1) return _insertBeforeLastBrace(content, snippet);
+    final openBrace = content.indexOf('{', classIndex);
+    if (openBrace == -1) return _insertBeforeLastBrace(content, snippet);
+
+    var depth = 0;
+    for (var index = openBrace; index < content.length; index++) {
+      final char = content[index];
+      if (char == '{') depth++;
+      if (char == '}') depth--;
+      if (depth == 0) {
+        return '${content.substring(0, index)}$snippet${content.substring(index)}';
+      }
+    }
+
+    return _insertBeforeLastBrace(content, snippet);
+  }
+
+  String _insertBeforeLastBrace(String content, String snippet) {
+    final index = content.lastIndexOf('}');
+    if (index == -1) return '$content$snippet';
+    return '${content.substring(0, index)}$snippet${content.substring(index)}';
+  }
+
+  String _withTrailingNewline(String content) {
+    return content.endsWith('\n') ? content : '$content\n';
   }
 
   void _runFlutterCreate(

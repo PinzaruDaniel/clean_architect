@@ -1,3 +1,7 @@
+## 0.2.1
+
+- Fixed injectable `data_module.dart` updates when adding another Hive/ObjectBox feature.
+
 ## 0.2.0
 
 - Renamed generated remote API service templates to remote data source templates.

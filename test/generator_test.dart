@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:clean_architect/src/cli.dart';
 import 'package:clean_architect/src/config.dart';
 import 'package:clean_architect/src/generator.dart';
 import 'package:clean_architect/src/templates/operation_templates.dart';
@@ -508,5 +509,56 @@ clean_architect:
     expect(
         dataModule.content, contains('Box<OrdersBox> ordersBox(Store store)'));
     expect(objectBoxPubspec.content, contains('objectbox_flutter_libs:'));
+  });
+
+  test('cli patches data module when adding another injectable feature', () {
+    final directory =
+        Directory.systemTemp.createTempSync('clean_architect_cli_patch_');
+    final previousDirectory = Directory.current;
+    addTearDown(() {
+      Directory.current = previousDirectory;
+      if (directory.existsSync()) {
+        directory.deleteSync(recursive: true);
+      }
+      exitCode = 0;
+    });
+
+    Directory.current = directory;
+    File(CleanArchitectConfig.fileName).writeAsStringSync('''
+clean_architect:
+  structure: layered_packages
+  state_management: getx
+  network: dio
+  local_storage: objectbox
+  dependency_injection: injectable
+  use_asset_generator: true
+  use_either_failure: false
+  flutter:
+    create_presentation: false
+    platforms:
+      - android
+      - ios
+  models:
+    use_freezed: true
+    use_json_serializable: true
+  paths:
+    domain: domain/lib
+    data: data/lib/features
+    presentation: presentation/lib
+    di: di/lib
+''');
+
+    final cli = CleanArchitectCli();
+    cli.run(['create', 'feature', 'orders', '--skip-presentation']);
+    cli.run(['create', 'feature', 'auth', '--skip-presentation']);
+
+    final dataModule = File('data/lib/data_module.dart').readAsStringSync();
+
+    expect(dataModule,
+        contains("import 'features/orders/local/models/orders_box.dart';"));
+    expect(dataModule,
+        contains("import 'features/auth/local/models/auth_box.dart';"));
+    expect(dataModule, contains('Box<OrdersBox> ordersBox(Store store)'));
+    expect(dataModule, contains('Box<AuthBox> authBox(Store store)'));
   });
 }
