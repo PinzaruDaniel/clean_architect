@@ -561,4 +561,99 @@ clean_architect:
     expect(dataModule, contains('Box<OrdersBox> ordersBox(Store store)'));
     expect(dataModule, contains('Box<AuthBox> authBox(Store store)'));
   });
+
+  test('cached function uses sync remote and stream local method names', () {
+    final directory =
+        Directory.systemTemp.createTempSync('clean_architect_cached_names_');
+    final previousDirectory = Directory.current;
+    addTearDown(() {
+      Directory.current = previousDirectory;
+      if (directory.existsSync()) {
+        directory.deleteSync(recursive: true);
+      }
+      exitCode = 0;
+    });
+
+    Directory.current = directory;
+    File(CleanArchitectConfig.fileName).writeAsStringSync('''
+clean_architect:
+  structure: layered_packages
+  state_management: getx
+  network: dio
+  local_storage: objectbox
+  dependency_injection: injectable
+  use_asset_generator: true
+  use_either_failure: false
+  flutter:
+    create_presentation: false
+    platforms:
+      - android
+      - ios
+  models:
+    use_freezed: true
+    use_json_serializable: true
+  paths:
+    domain: domain/lib
+    data: data/lib/features
+    presentation: presentation/lib
+    di: di/lib
+''');
+
+    final cli = CleanArchitectCli();
+    cli.run(['create', 'feature', 'orders']);
+    cli.run([
+      'create',
+      'cached-function',
+      'syncDetails',
+      '--feature',
+      'orders',
+    ]);
+
+    final remoteSource = File(
+      'data/lib/features/orders/remote/orders_remote_data_source.dart',
+    ).readAsStringSync();
+    final localSource = File(
+      'data/lib/features/orders/local/orders_local_data_source.dart',
+    ).readAsStringSync();
+    final repository = File(
+      'domain/lib/features/orders/repositories/orders_repository.dart',
+    ).readAsStringSync();
+    final repositoryImpl = File(
+      'data/lib/features/orders/repositories/orders_repository_impl.dart',
+    ).readAsStringSync();
+    final controller = File(
+      'presentation/lib/controllers/orders_controller.dart',
+    ).readAsStringSync();
+    final remoteUseCase = File(
+      'domain/lib/features/orders/usecases/sync_details_use_case.dart',
+    ).readAsStringSync();
+    final cacheUseCase = File(
+      'domain/lib/features/orders/usecases/stream_details_use_case.dart',
+    ).readAsStringSync();
+
+    for (final content in [
+      remoteSource,
+      repository,
+      repositoryImpl,
+      controller
+    ]) {
+      expect(content, contains('syncDetails()'));
+    }
+    for (final content in [
+      localSource,
+      repository,
+      repositoryImpl,
+      controller
+    ]) {
+      expect(content, contains('streamDetails()'));
+    }
+    expect(remoteUseCase, contains('_repository.syncDetails()'));
+    expect(cacheUseCase, contains('_repository.streamDetails()'));
+    expect(remoteUseCase, contains('class SyncDetailsUseCase'));
+    expect(cacheUseCase, contains('class StreamDetailsUseCase'));
+    expect(controller, contains('_syncDetailsUseCase'));
+    expect(controller, contains('_streamDetailsUseCase'));
+    expect(repository, isNot(contains('syncDetailsRemote()')));
+    expect(repository, isNot(contains('syncDetailsCache()')));
+  });
 }

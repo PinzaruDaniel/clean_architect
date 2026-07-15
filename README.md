@@ -499,15 +499,18 @@ Adds remote and local support together:
 
 ```txt
 domain/lib/features/orders/entities/sync_details_entity.dart
-domain/lib/features/orders/usecases/sync_details_remote_use_case.dart
-domain/lib/features/orders/usecases/sync_details_cache_use_case.dart
+domain/lib/features/orders/usecases/sync_details_use_case.dart
+domain/lib/features/orders/usecases/stream_details_use_case.dart
 data/lib/features/orders/remote/models/sync_details_dto.dart
 data/lib/features/orders/local/models/sync_details_box.dart
 data/lib/features/orders/mappers/sync_details_mapper.dart
 data/lib/features/orders/mappers/sync_details_box_mapper.dart
 ```
 
-Patches remote source, local source, repository contract, repository implementation, and adds two controller functions: one for remote and one for cache.
+Patches the remote source with `syncDetails()`, the local source with
+`streamDetails()`, and uses those same names in the repository, use cases,
+repository implementation, and controller. The generated use cases are
+`SyncDetailsUseCase` and `StreamDetailsUseCase`.
 
 ## Dependency Injection Modes
 

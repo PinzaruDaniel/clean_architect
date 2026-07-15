@@ -1,3 +1,7 @@
+## 0.2.2
+
+- Updated cached operations and use cases to use `sync<Name>` remotely and `stream<Name>` locally across generated layers.
+
 ## 0.2.1
 
 - Fixed injectable `data_module.dart` updates when adding another Hive/ObjectBox feature.

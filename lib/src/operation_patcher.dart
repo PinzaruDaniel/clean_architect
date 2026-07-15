@@ -29,7 +29,7 @@ class OperationPatcher {
     final paths = PathResolver(config).resolve(feature.snake);
 
     if (kind.includesRemote) {
-      _patchRemoteSource(paths.data, feature, operation);
+      _patchRemoteSource(paths.data, feature, operation, kind);
     }
     if (kind.includesLocal) {
       _patchLocalSource(paths.data, feature, operation, kind);
@@ -43,14 +43,19 @@ class OperationPatcher {
   }
 
   void _patchRemoteSource(
-      String dataPath, NameCases feature, NameCases operation) {
+    String dataPath,
+    NameCases feature,
+    NameCases operation,
+    OperationKind kind,
+  ) {
     final path =
         p.join(dataPath, 'remote', '${feature.snake}_remote_data_source.dart');
     final importLine = "import 'models/${operation.snake}_dto.dart';";
+    final methodName = _remoteMethodName(operation, kind);
     final snippet = '''
 
   @GET('/${feature.snake}/${operation.snake}')
-  Future<${operation.pascal}Dto> ${operation.camel}();
+  Future<${operation.pascal}Dto> $methodName();
 ''';
     _patchClassFile(
       path: path,
@@ -71,7 +76,7 @@ abstract class ${feature.pascal}RemoteDataSource {
 $snippet}
 ''',
       imports: [importLine],
-      duplicateNeedle: 'Future<${operation.pascal}Dto> ${operation.camel}()',
+      duplicateNeedle: 'Future<${operation.pascal}Dto> $methodName()',
       snippet: snippet,
     );
   }
@@ -86,7 +91,7 @@ $snippet}
         p.join(dataPath, 'local', '${feature.snake}_local_data_source.dart');
     final importLine = "import 'models/${operation.snake}_box.dart';";
     final methodName = kind == OperationKind.cached
-        ? '${operation.camel}Cache'
+        ? _localMethodName(operation)
         : operation.camel;
     final abstractSnippet = '''
 
@@ -330,19 +335,23 @@ class ${feature.pascal}RepositoryImpl implements ${feature.pascal}Repository {
   ) {
     final path = p.join(
         presentationPath, 'controllers', '${feature.snake}_controller.dart');
+    final remoteMethodName = _remoteMethodName(operation, kind);
+    final localMethodName = _localMethodName(operation);
+    final remoteUseCase = NameCases(remoteMethodName);
+    final localUseCase = NameCases(localMethodName);
     final useCases = kind == OperationKind.cached
         ? [
             _UseCaseInfo(
-              fileName: '${operation.snake}_remote_use_case.dart',
-              className: '${operation.pascal}RemoteUseCase',
-              fieldName: '_${operation.camel}RemoteUseCase',
-              methodName: '${operation.camel}Remote',
+              fileName: '${remoteUseCase.snake}_use_case.dart',
+              className: '${remoteUseCase.pascal}UseCase',
+              fieldName: '_${remoteUseCase.camel}UseCase',
+              methodName: remoteMethodName,
             ),
             _UseCaseInfo(
-              fileName: '${operation.snake}_cache_use_case.dart',
-              className: '${operation.pascal}CacheUseCase',
-              fieldName: '_${operation.camel}CacheUseCase',
-              methodName: '${operation.camel}Cache',
+              fileName: '${localUseCase.snake}_use_case.dart',
+              className: '${localUseCase.pascal}UseCase',
+              fieldName: '_${localUseCase.camel}UseCase',
+              methodName: localMethodName,
             ),
           ]
         : [
@@ -388,8 +397,8 @@ $fields$methods}
       OperationKind.remote => [operation.camel],
       OperationKind.local => [operation.camel],
       OperationKind.cached => [
-          '${operation.camel}Remote',
-          '${operation.camel}Cache',
+          _remoteMethodName(operation, kind),
+          _localMethodName(operation),
         ],
     };
   }
@@ -402,22 +411,22 @@ $fields$methods}
     final methods = StringBuffer();
     if (kind.includesRemote) {
       final methodName = kind == OperationKind.cached
-          ? '${operation.camel}Remote'
+          ? _remoteMethodName(operation, kind)
           : operation.camel;
       methods.write('''
 
   @override
   $returnType $methodName() async {
-${_wrapReturn('final dto = await _remoteDataSource.${operation.camel}();', 'dto.toEntity()')}
+${_wrapReturn('final dto = await _remoteDataSource.${_remoteMethodName(operation, kind)}();', 'dto.toEntity()')}
   }
 ''');
     }
     if (kind.includesLocal) {
       final methodName = kind == OperationKind.cached
-          ? '${operation.camel}Cache'
+          ? _localMethodName(operation)
           : operation.camel;
       final sourceMethod = kind == OperationKind.cached
-          ? '${operation.camel}Cache'
+          ? _localMethodName(operation)
           : operation.camel;
       methods.write('''
 
@@ -450,6 +459,26 @@ ${_wrapReturn('final box = await _localDataSource.$sourceMethod();', 'box.toEnti
       return 'Future<Either<Failure, $valueType>>';
     }
     return 'Future<$valueType>';
+  }
+
+  String _remoteMethodName(NameCases operation, OperationKind kind) {
+    if (kind != OperationKind.cached) return operation.camel;
+    return 'sync${_cachedSubject(operation)}';
+  }
+
+  String _localMethodName(NameCases operation) {
+    return 'stream${_cachedSubject(operation)}';
+  }
+
+  String _cachedSubject(NameCases operation) {
+    final name = operation.pascal;
+    if (name.startsWith('Sync') && name.length > 4) {
+      return name.substring(4);
+    }
+    if (name.startsWith('Stream') && name.length > 6) {
+      return name.substring(6);
+    }
+    return name;
   }
 
   void _patchClassFile({

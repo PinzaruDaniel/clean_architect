@@ -31,9 +31,21 @@ List<GeneratedFile> operationTemplates(
   }
 
   if (kind == OperationKind.cached) {
+    final remoteMethodName = _cachedRemoteMethodName(operation);
+    final localMethodName = _cachedLocalMethodName(operation);
     files
-      ..add(_useCase(context, operation, suffix: 'remote'))
-      ..add(_useCase(context, operation, suffix: 'cache'));
+      ..add(_useCase(
+        context,
+        operation,
+        useCaseName: NameCases(remoteMethodName),
+        repositoryMethodName: remoteMethodName,
+      ))
+      ..add(_useCase(
+        context,
+        operation,
+        useCaseName: NameCases(localMethodName),
+        repositoryMethodName: localMethodName,
+      ));
   } else {
     files.add(_useCase(context, operation));
   }
@@ -262,17 +274,13 @@ extension ${operation.pascal}BoxMapper on ${operation.pascal}Box {
 GeneratedFile _useCase(
   TemplateContext context,
   NameCases operation, {
-  String? suffix,
+  NameCases? useCaseName,
+  String? repositoryMethodName,
 }) {
-  final className = suffix == null
-      ? '${operation.pascal}UseCase'
-      : '${operation.pascal}${NameCases(suffix).pascal}UseCase';
-  final fileName = suffix == null
-      ? '${operation.snake}_use_case.dart'
-      : '${operation.snake}_${suffix}_use_case.dart';
-  final methodName = suffix == null
-      ? operation.camel
-      : '${operation.camel}${NameCases(suffix).pascal}';
+  final name = useCaseName ?? operation;
+  final className = '${name.pascal}UseCase';
+  final fileName = '${name.snake}_use_case.dart';
+  final methodName = repositoryMethodName ?? operation.camel;
   final returnType = _returnType(context, '${operation.pascal}Entity');
   final eitherImport = context.config.useEitherFailure
       ? "import 'package:dartz/dartz.dart';\n\nimport '../failures/failure.dart';\n"
@@ -295,6 +303,25 @@ class $className {
 }
 ''',
   );
+}
+
+String _cachedRemoteMethodName(NameCases operation) {
+  return 'sync${_cachedSubject(operation)}';
+}
+
+String _cachedLocalMethodName(NameCases operation) {
+  return 'stream${_cachedSubject(operation)}';
+}
+
+String _cachedSubject(NameCases operation) {
+  final name = operation.pascal;
+  if (name.startsWith('Sync') && name.length > 4) {
+    return name.substring(4);
+  }
+  if (name.startsWith('Stream') && name.length > 6) {
+    return name.substring(6);
+  }
+  return name;
 }
 
 String _returnType(TemplateContext context, String valueType) {
