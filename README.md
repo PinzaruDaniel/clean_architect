@@ -324,7 +324,16 @@ clean_architect:
     di: di/lib
 ```
 
-Current path resolution places domain files under `domain/lib/features/<feature>` and data files under `data/lib/features/<feature>`. Presentation files stay in shared presentation folders: `pages`, `controllers`, and `widgets`.
+Feature-first resolution keeps the four layer packages while grouping each
+feature inside every layer:
+
+```txt
+domain/lib/features/<feature>/...
+data/lib/features/<feature>/...
+presentation/lib/features/<feature>/pages/...
+presentation/lib/features/<feature>/controllers/...
+di/lib/features/<feature>/...
+```
 
 ## `create architecture`
 
@@ -545,6 +554,13 @@ di/lib/di.dart
 
 Generated classes receive injectable annotations where supported. After generation, run build runner in the generated packages that contain injectable/freezed/json_serializable code.
 
+```sh
+cd domain
+dart run build_runner build
+cd ../data
+dart run build_runner build
+```
+
 ## Either / Failure Return Type
 
 ```yaml
@@ -580,7 +596,7 @@ Entities and DTOs use Freezed. DTOs also include JSON serialization parts when J
 Typical follow-up command in generated packages:
 
 ```sh
-dart run build_runner build --delete-conflicting-outputs
+dart run build_runner build
 ```
 
 ### Plain Dart Fallback
@@ -661,11 +677,17 @@ Auth local source uses `flutter_secure_storage` for credential persistence.
 local_storage: hive
 ```
 
-The data package gets Hive dependencies, local sources can initialize their box, and injectable projects get a generated module:
+The data package uses the maintained Hive CE runtime and generator packages.
+Local sources can initialize their boxes directly. Injectable projects get a
+generated module that initializes Hive, registers each adapter with a stable
+type ID, opens each box, and provides the box to its local data source:
 
 ```txt
 data/lib/data_module.dart
 ```
+
+Adding another Hive feature or local/cached operation updates the same module
+with the additional adapter and box provider.
 
 ### ObjectBox
 
@@ -688,6 +710,24 @@ local_storage: abstract
 ```
 
 Auth local source contains TODO methods so you can wire a custom persistence mechanism yourself.
+
+## Dependency Compatibility
+
+Version 0.3.0 emits only the dependencies required by the selected
+configuration. Runtime packages use their current stable releases. Builder
+packages use the newest mutually compatible stable set verified against
+generated Flutter projects:
+
+```txt
+build_runner: ^2.15.1
+freezed: ^3.2.5
+injectable_generator: ^3.0.2
+hive_ce_generator: 1.11.1
+```
+
+Some newer individual builder releases target incompatible analyzer versions.
+These constraints avoid prerelease transitive dependencies while allowing
+Freezed, Retrofit, Injectable, and Hive CE generation to run together.
 
 ## Presentation Package
 

@@ -27,17 +27,17 @@ class PathResolver {
 
     return switch (config.structure) {
       ProjectStructure.featureFirst => FeaturePaths(
-          domain: p.join(config.paths.domain, 'features', feature),
-          data: p.join(config.paths.data, feature),
-          presentation: config.paths.presentation,
-          di: config.paths.di,
-        ),
+        domain: p.join(config.paths.domain, 'features', feature),
+        data: p.join(config.paths.data, feature),
+        presentation: p.join(config.paths.presentation, 'features', feature),
+        di: p.join(config.paths.di, 'features', feature),
+      ),
       ProjectStructure.layeredPackages => FeaturePaths(
-          domain: p.join(config.paths.domain, 'features', feature),
-          data: p.join(config.paths.data, feature),
-          presentation: config.paths.presentation,
-          di: config.paths.di,
-        ),
+        domain: p.join(config.paths.domain, 'features', feature),
+        data: p.join(config.paths.data, feature),
+        presentation: config.paths.presentation,
+        di: config.paths.di,
+      ),
     };
   }
 }

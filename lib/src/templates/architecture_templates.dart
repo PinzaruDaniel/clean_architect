@@ -7,10 +7,7 @@ List<GeneratedFile> architectureTemplates(TemplateContext context) {
   final files = <GeneratedFile>[
     ..._domainFolders(context),
     ..._dataFolders(context),
-    GeneratedFile(
-      path: p.join(context.paths.di, '.gitkeep'),
-      content: '',
-    ),
+    GeneratedFile(path: p.join(context.paths.di, '.gitkeep'), content: ''),
   ];
 
   return files;

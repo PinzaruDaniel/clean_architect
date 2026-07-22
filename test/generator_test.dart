@@ -19,28 +19,43 @@ void main() {
     expect(paths, contains('presentation/pubspec.yaml'));
     expect(paths, contains('presentation/lib/main.dart'));
     expect(
-        paths, contains('domain/lib/features/base_feature/entities/.gitkeep'));
-    expect(paths,
-        contains('domain/lib/features/base_feature/repositories/.gitkeep'));
+      paths,
+      contains('domain/lib/features/base_feature/entities/.gitkeep'),
+    );
     expect(
-        paths, contains('domain/lib/features/base_feature/usecases/.gitkeep'));
-    expect(paths,
-        contains('data/lib/features/base_feature/remote/models/.gitkeep'));
-    expect(paths,
-        contains('data/lib/features/base_feature/local/models/.gitkeep'));
-    expect(paths,
-        contains('data/lib/features/base_feature/repositories/.gitkeep'));
+      paths,
+      contains('domain/lib/features/base_feature/repositories/.gitkeep'),
+    );
+    expect(
+      paths,
+      contains('domain/lib/features/base_feature/usecases/.gitkeep'),
+    );
+    expect(
+      paths,
+      contains('data/lib/features/base_feature/remote/models/.gitkeep'),
+    );
+    expect(
+      paths,
+      contains('data/lib/features/base_feature/local/models/.gitkeep'),
+    );
+    expect(
+      paths,
+      contains('data/lib/features/base_feature/repositories/.gitkeep'),
+    );
     expect(paths, contains('di/lib/.gitkeep'));
     expect(paths, isNot(contains('di/lib/auth_di.dart')));
     expect(
-        paths,
-        isNot(contains(
-            'domain/lib/features/auth/entities/auth_token_entity.dart')));
+      paths,
+      isNot(
+        contains('domain/lib/features/auth/entities/auth_token_entity.dart'),
+      ),
+    );
   });
 
   test('generates auth module files', () {
-    final files =
-        CleanArchitectGenerator(CleanArchitectConfig.defaults()).auth();
+    final files = CleanArchitectGenerator(
+      CleanArchitectConfig.defaults(),
+    ).auth();
     final paths = files.map((file) => file.path).toSet();
 
     expect(paths, contains('domain/pubspec.yaml'));
@@ -48,30 +63,44 @@ void main() {
     expect(paths, contains('di/pubspec.yaml'));
     expect(paths, contains('presentation/pubspec.yaml'));
     expect(paths, contains('presentation/lib/main.dart'));
-    expect(paths,
-        contains('domain/lib/features/auth/entities/auth_token_entity.dart'));
-    expect(paths,
-        contains('domain/lib/features/auth/usecases/login_use_case.dart'));
-    expect(paths,
-        contains('data/lib/features/auth/remote/auth_remote_data_source.dart'));
-    expect(paths, contains('presentation/lib/pages/login_page.dart'));
-    expect(paths,
-        isNot(contains('presentation/lib/widgets/login_view_item.dart')));
     expect(
-        paths, contains('data/lib/features/auth/local/models/auth_box.dart'));
+      paths,
+      contains('domain/lib/features/auth/entities/auth_token_entity.dart'),
+    );
+    expect(
+      paths,
+      contains('domain/lib/features/auth/usecases/login_use_case.dart'),
+    );
+    expect(
+      paths,
+      contains('data/lib/features/auth/remote/auth_remote_data_source.dart'),
+    );
+    expect(paths, contains('presentation/lib/pages/login_page.dart'));
+    expect(
+      paths,
+      isNot(contains('presentation/lib/widgets/login_view_item.dart')),
+    );
+    expect(
+      paths,
+      contains('data/lib/features/auth/local/models/auth_box.dart'),
+    );
     expect(paths, contains('di/lib/auth_di.dart'));
 
     final tokenEntity = files.singleWhere(
       (file) => file.path.endsWith('auth_token_entity.dart'),
     );
     expect(tokenEntity.content, contains('@freezed'));
-    expect(tokenEntity.content,
-        contains("part 'auth_token_entity.freezed.dart';"));
+    expect(tokenEntity.content, contains('abstract class AuthTokenEntity'));
+    expect(
+      tokenEntity.content,
+      contains("part 'auth_token_entity.freezed.dart';"),
+    );
 
     final tokenDto = files.singleWhere(
       (file) => file.path.endsWith('auth_token_dto.dart'),
     );
     expect(tokenDto.content, contains('@freezed'));
+    expect(tokenDto.content, contains('abstract class AuthTokenDto'));
     expect(tokenDto.content, contains("part 'auth_token_dto.g.dart';"));
 
     final remoteDataSource = files.singleWhere(
@@ -79,20 +108,32 @@ void main() {
     );
     expect(remoteDataSource.content, contains('@RestApi(baseUrl:'));
     expect(
-        remoteDataSource.content, contains("@POST('/authorization/token/')"));
-    expect(remoteDataSource.content, contains('@Named("auth_dio") Dio dio'));
+      remoteDataSource.content,
+      contains("@POST('/authorization/token/')"),
+    );
+    expect(
+      remoteDataSource.content,
+      contains('factory AuthRemoteDataSource(Dio dio)'),
+    );
+    expect(remoteDataSource.content, isNot(contains('package:injectable')));
 
     final authRemoteDataSource = remoteDataSource;
-    expect(authRemoteDataSource.content,
-        contains('abstract class AuthRemoteDataSource'));
+    expect(
+      authRemoteDataSource.content,
+      contains('abstract class AuthRemoteDataSource'),
+    );
 
     final localDataSource = files.singleWhere(
       (file) => file.path.endsWith('auth_local_data_source.dart'),
     );
-    expect(localDataSource.content,
-        contains('abstract class AuthLocalDataSource'));
-    expect(localDataSource.content,
-        contains('static Future<AuthLocalDataSource> init()'));
+    expect(
+      localDataSource.content,
+      contains('abstract class AuthLocalDataSource'),
+    );
+    expect(
+      localDataSource.content,
+      contains('static Future<AuthLocalDataSource> init()'),
+    );
     expect(
       localDataSource.content,
       contains('class AuthLocalDataSourceImpl implements AuthLocalDataSource'),
@@ -103,7 +144,9 @@ void main() {
           file.path == 'presentation/lib/controllers/auth_controller.dart',
     );
     expect(
-        authController.content, contains('GetIt.instance.get<LoginUseCase>()'));
+      authController.content,
+      contains('GetIt.instance.get<LoginUseCase>()'),
+    );
     expect(authController.content, contains('class LoginState'));
     expect(authController.content, isNot(contains('LoginViewItem')));
 
@@ -137,95 +180,102 @@ void main() {
     expect(paths, isNot(contains('presentation/lib/pages/orders_page.dart')));
   });
 
-  test('generic feature generates retrofit remote data source and freezed dto',
-      () {
-    const config = CleanArchitectConfig(
-      structure: ProjectStructure.featureFirst,
-      stateManagement: StateManagement.getx,
-      network: NetworkClient.dio,
-      localStorage: LocalStorage.abstract,
-      dependencyInjection: DependencyInjection.manual,
-      useAssetGenerator: true,
-      useEitherFailure: false,
-      flutter: FlutterConfig(
-        createPresentation: false,
-        platforms: ['android', 'ios'],
-      ),
-      models: ModelConfig(
-        useFreezed: true,
-        useJsonSerializable: true,
-      ),
-      paths: PathConfig(
-        domain: 'domain/lib',
-        data: 'data/lib/features',
-        presentation: 'presentation/lib',
-        di: 'di/lib',
-      ),
-    );
+  test(
+    'generic feature generates retrofit remote data source and freezed dto',
+    () {
+      const config = CleanArchitectConfig(
+        structure: ProjectStructure.featureFirst,
+        stateManagement: StateManagement.getx,
+        network: NetworkClient.dio,
+        localStorage: LocalStorage.abstract,
+        dependencyInjection: DependencyInjection.manual,
+        useAssetGenerator: true,
+        useEitherFailure: false,
+        flutter: FlutterConfig(
+          createPresentation: false,
+          platforms: ['android', 'ios'],
+        ),
+        models: ModelConfig(useFreezed: true, useJsonSerializable: true),
+        paths: PathConfig(
+          domain: 'domain/lib',
+          data: 'data/lib/features',
+          presentation: 'presentation/lib',
+          di: 'di/lib',
+        ),
+      );
 
-    final files = CleanArchitectGenerator(config).feature('profile');
-    final remoteDataSource = files.singleWhere(
-      (file) => file.path.endsWith('profile_remote_data_source.dart'),
-    );
-    final dto = files.singleWhere(
-      (file) => file.path.endsWith('profile_dto.dart'),
-    );
-    final page = files.singleWhere(
-      (file) => file.path == 'presentation/lib/pages/profile_page.dart',
-    );
+      final files = CleanArchitectGenerator(config).feature('profile');
+      final remoteDataSource = files.singleWhere(
+        (file) => file.path.endsWith('profile_remote_data_source.dart'),
+      );
+      final dto = files.singleWhere(
+        (file) => file.path.endsWith('profile_dto.dart'),
+      );
+      final page = files.singleWhere(
+        (file) =>
+            file.path ==
+            'presentation/lib/features/profile/pages/profile_page.dart',
+      );
 
-    expect(
-        remoteDataSource.content, contains('package:retrofit/retrofit.dart'));
-    expect(remoteDataSource.content, contains("@GET('/profile')"));
-    expect(dto.content, contains('@freezed'));
-    expect(page.content, contains('Get.find<ProfileController>()'));
-    expect(page.content, contains('controller.load();'));
-  });
-  test('injectable mode generates injector files and skips manual feature di',
-      () {
-    const config = CleanArchitectConfig(
-      structure: ProjectStructure.layeredPackages,
-      stateManagement: StateManagement.getx,
-      network: NetworkClient.dio,
-      localStorage: LocalStorage.secureStorage,
-      dependencyInjection: DependencyInjection.injectable,
-      useAssetGenerator: true,
-      useEitherFailure: false,
-      flutter: FlutterConfig(
-        createPresentation: false,
-        platforms: ['android', 'ios'],
-      ),
-      models: ModelConfig(
-        useFreezed: true,
-        useJsonSerializable: true,
-      ),
-      paths: PathConfig(
-        domain: 'domain/lib',
-        data: 'data/lib/features',
-        presentation: 'presentation/lib',
-        di: 'di/lib',
-      ),
-    );
+      expect(
+        remoteDataSource.content,
+        contains('package:retrofit/retrofit.dart'),
+      );
+      expect(remoteDataSource.content, contains("@GET('/profile')"));
+      expect(dto.content, contains('@freezed'));
+      expect(page.content, contains('Get.find<ProfileController>()'));
+      expect(page.content, contains('controller.load();'));
+    },
+  );
+  test(
+    'injectable mode generates injector files and skips manual feature di',
+    () {
+      const config = CleanArchitectConfig(
+        structure: ProjectStructure.layeredPackages,
+        stateManagement: StateManagement.getx,
+        network: NetworkClient.dio,
+        localStorage: LocalStorage.secureStorage,
+        dependencyInjection: DependencyInjection.injectable,
+        useAssetGenerator: true,
+        useEitherFailure: false,
+        flutter: FlutterConfig(
+          createPresentation: false,
+          platforms: ['android', 'ios'],
+        ),
+        models: ModelConfig(useFreezed: true, useJsonSerializable: true),
+        paths: PathConfig(
+          domain: 'domain/lib',
+          data: 'data/lib/features',
+          presentation: 'presentation/lib',
+          di: 'di/lib',
+        ),
+      );
 
-    final files = CleanArchitectGenerator(config).auth();
-    final paths = files.map((file) => file.path).toSet();
+      final files = CleanArchitectGenerator(config).auth();
+      final paths = files.map((file) => file.path).toSet();
 
-    expect(paths, contains('domain/lib/injector.dart'));
-    expect(paths, contains('data/lib/injector.dart'));
-    expect(paths, contains('di/lib/di.dart'));
-    expect(paths, isNot(contains('di/lib/auth_di.dart')));
+      expect(paths, contains('domain/lib/injector.dart'));
+      expect(paths, contains('data/lib/injector.dart'));
+      expect(paths, contains('di/lib/di.dart'));
+      expect(paths, isNot(contains('di/lib/auth_di.dart')));
 
-    final repository = files.singleWhere(
-      (file) => file.path.endsWith('auth_repository_impl.dart'),
-    );
-    expect(repository.content, contains('@lazySingleton'));
+      final repository = files.singleWhere(
+        (file) => file.path.endsWith('auth_repository_impl.dart'),
+      );
+      expect(
+        repository.content,
+        contains('@LazySingleton(as: AuthRepository)'),
+      );
 
-    final localDataSource = files.singleWhere(
-      (file) => file.path.endsWith('auth_local_data_source.dart'),
-    );
-    expect(localDataSource.content,
-        contains('@LazySingleton(as: AuthLocalDataSource)'));
-  });
+      final localDataSource = files.singleWhere(
+        (file) => file.path.endsWith('auth_local_data_source.dart'),
+      );
+      expect(
+        localDataSource.content,
+        contains('@LazySingleton(as: AuthLocalDataSource)'),
+      );
+    },
+  );
   test('remote operation generates dto entity mapper and either usecase', () {
     const config = CleanArchitectConfig(
       structure: ProjectStructure.layeredPackages,
@@ -239,10 +289,7 @@ void main() {
         createPresentation: false,
         platforms: ['android', 'ios'],
       ),
-      models: ModelConfig(
-        useFreezed: true,
-        useJsonSerializable: true,
-      ),
+      models: ModelConfig(useFreezed: true, useJsonSerializable: true),
       paths: PathConfig(
         domain: 'domain/lib',
         data: 'data/lib/features',
@@ -251,32 +298,34 @@ void main() {
       ),
     );
 
-    final files = CleanArchitectGenerator(config).operation(
-      'loadDetails',
-      feature: 'orders',
-      kind: OperationKind.remote,
-    );
+    final files = CleanArchitectGenerator(
+      config,
+    ).operation('loadDetails', feature: 'orders', kind: OperationKind.remote);
     final paths = files.map((file) => file.path).toSet();
 
     expect(paths, contains('domain/lib/failures/failure.dart'));
     expect(
-        paths,
-        contains(
-            'domain/lib/features/orders/entities/load_details_entity.dart'));
+      paths,
+      contains('domain/lib/features/orders/entities/load_details_entity.dart'),
+    );
     expect(
-        paths,
-        contains(
-            'data/lib/features/orders/remote/models/load_details_dto.dart'));
+      paths,
+      contains('data/lib/features/orders/remote/models/load_details_dto.dart'),
+    );
     expect(
-        paths,
-        contains(
-            'domain/lib/features/orders/usecases/load_details_use_case.dart'));
+      paths,
+      contains(
+        'domain/lib/features/orders/usecases/load_details_use_case.dart',
+      ),
+    );
 
     final useCase = files.singleWhere(
       (file) => file.path.endsWith('load_details_use_case.dart'),
     );
-    expect(useCase.content,
-        contains('Future<Either<Failure, LoadDetailsEntity>> call()'));
+    expect(
+      useCase.content,
+      contains('Future<Either<Failure, LoadDetailsEntity>> call()'),
+    );
   });
 
   test('feature templates use Either Failure when configured', () {
@@ -292,10 +341,7 @@ void main() {
         createPresentation: false,
         platforms: ['android', 'ios'],
       ),
-      models: ModelConfig(
-        useFreezed: true,
-        useJsonSerializable: true,
-      ),
+      models: ModelConfig(useFreezed: true, useJsonSerializable: true),
       paths: PathConfig(
         domain: 'domain/lib',
         data: 'data/lib/features',
@@ -314,18 +360,29 @@ void main() {
     final useCase = files.singleWhere(
       (file) => file.path.endsWith('get_orders_list_use_case.dart'),
     );
+    final controller = files.singleWhere(
+      (file) => file.path.endsWith('orders_controller.dart'),
+    );
 
-    expect(repository.content,
-        contains('Future<Either<Failure, List<OrdersEntity>>>'));
+    expect(
+      repository.content,
+      contains('Future<Either<Failure, List<OrdersEntity>>>'),
+    );
     expect(repositoryImpl.content, contains('return right('));
-    expect(repositoryImpl.content,
-        contains('return left(Failure(error.toString()))'));
-    expect(useCase.content,
-        contains('Future<Either<Failure, List<OrdersEntity>>> call()'));
+    expect(
+      repositoryImpl.content,
+      contains('return left(Failure(error.toString()))'),
+    );
+    expect(
+      useCase.content,
+      contains('Future<Either<Failure, List<OrdersEntity>>> call()'),
+    );
+    expect(controller.content, contains('result.fold('));
   });
   test('config parses flutter create presentation settings', () {
-    final directory =
-        Directory.systemTemp.createTempSync('clean_architect_config_');
+    final directory = Directory.systemTemp.createTempSync(
+      'clean_architect_config_',
+    );
     addTearDown(() => directory.deleteSync(recursive: true));
     final file = File('${directory.path}/clean_architect.yaml')
       ..writeAsStringSync('''
@@ -362,10 +419,7 @@ clean_architect:
         createPresentation: false,
         platforms: ['android', 'ios'],
       ),
-      models: ModelConfig(
-        useFreezed: true,
-        useJsonSerializable: true,
-      ),
+      models: ModelConfig(useFreezed: true, useJsonSerializable: true),
       paths: basePaths,
     );
 
@@ -381,11 +435,15 @@ clean_architect:
       (file) => file.path == 'presentation/pubspec.yaml',
     );
 
-    expect(blocController.content,
-        contains('extends Bloc<OrdersEvent, OrdersState>'));
+    expect(
+      blocController.content,
+      contains('extends Bloc<OrdersEvent, OrdersState>'),
+    );
     expect(blocPage.content, contains('BlocProvider'));
-    expect(blocPage.content,
-        contains('class OrdersViewItem extends StatelessWidget'));
+    expect(
+      blocPage.content,
+      contains('class OrdersViewItem extends StatelessWidget'),
+    );
     expect(
       blocFiles.map((file) => file.path),
       isNot(contains('presentation/lib/widgets/orders_view_item.dart')),
@@ -404,15 +462,13 @@ clean_architect:
         createPresentation: false,
         platforms: ['android', 'ios'],
       ),
-      models: ModelConfig(
-        useFreezed: true,
-        useJsonSerializable: true,
-      ),
+      models: ModelConfig(useFreezed: true, useJsonSerializable: true),
       paths: basePaths,
     );
 
-    final providerFiles =
-        CleanArchitectGenerator(providerConfig).feature('orders');
+    final providerFiles = CleanArchitectGenerator(
+      providerConfig,
+    ).feature('orders');
     final providerController = providerFiles.singleWhere(
       (file) =>
           file.path == 'presentation/lib/controllers/orders_controller.dart',
@@ -426,8 +482,10 @@ clean_architect:
 
     expect(providerController.content, contains('extends ChangeNotifier'));
     expect(providerPage.content, contains('ChangeNotifierProvider'));
-    expect(providerPage.content,
-        contains('class OrdersViewItem extends StatelessWidget'));
+    expect(
+      providerPage.content,
+      contains('class OrdersViewItem extends StatelessWidget'),
+    );
     expect(providerPubspec.content, contains('provider:'));
   });
 
@@ -444,17 +502,14 @@ clean_architect:
       stateManagement: StateManagement.getx,
       network: NetworkClient.dio,
       localStorage: LocalStorage.hive,
-      dependencyInjection: DependencyInjection.manual,
+      dependencyInjection: DependencyInjection.injectable,
       useAssetGenerator: true,
       useEitherFailure: false,
       flutter: FlutterConfig(
         createPresentation: false,
         platforms: ['android', 'ios'],
       ),
-      models: ModelConfig(
-        useFreezed: true,
-        useJsonSerializable: true,
-      ),
+      models: ModelConfig(useFreezed: true, useJsonSerializable: true),
       paths: basePaths,
     );
 
@@ -471,10 +526,25 @@ clean_architect:
     final hivePubspec = hiveFiles.singleWhere(
       (file) => file.path == 'data/pubspec.yaml',
     );
+    final hiveDataModule = hiveFiles.singleWhere(
+      (file) => file.path == 'data/lib/data_module.dart',
+    );
+    final hiveDataInjector = hiveFiles.singleWhere(
+      (file) => file.path == 'data/lib/injector.dart',
+    );
 
     expect(hiveBox.content, contains('int id'));
     expect(hiveLocalSource.content, contains('Hive.openBox<OrdersBox>'));
-    expect(hivePubspec.content, contains('hive_flutter:'));
+    expect(hivePubspec.content, contains('hive_ce_flutter: ^2.3.4'));
+    expect(hivePubspec.content, contains('hive_ce: ^2.19.3'));
+    expect(hivePubspec.content, contains('hive_ce_generator: 1.11.1'));
+    expect(hivePubspec.content, contains('build_runner: ^2.15.1'));
+    expect(hivePubspec.content, contains('injectable_generator: ^3.0.2'));
+    expect(hivePubspec.content, isNot(contains('flutter_secure_storage:')));
+    expect(hiveDataModule.content, contains('await Hive.initFlutter();'));
+    expect(hiveDataModule.content, contains('OrdersBoxAdapter()'));
+    expect(hiveDataModule.content, isNot(contains('Future<void> initHive()')));
+    expect(hiveDataInjector.content, contains('await get.init();'));
     expect(
       hiveFiles.map((file) => file.path),
       isNot(contains('data/lib/core/local_storage.dart')),
@@ -492,15 +562,13 @@ clean_architect:
         createPresentation: false,
         platforms: ['android', 'ios'],
       ),
-      models: ModelConfig(
-        useFreezed: true,
-        useJsonSerializable: true,
-      ),
+      models: ModelConfig(useFreezed: true, useJsonSerializable: true),
       paths: basePaths,
     );
 
-    final objectBoxFiles =
-        CleanArchitectGenerator(objectBoxInjectableConfig).feature('orders');
+    final objectBoxFiles = CleanArchitectGenerator(
+      objectBoxInjectableConfig,
+    ).feature('orders');
     final objectBoxBox = objectBoxFiles.singleWhere(
       (file) =>
           file.path == 'data/lib/features/orders/local/models/orders_box.dart',
@@ -519,13 +587,16 @@ clean_architect:
     expect(dataModule.content, contains("@Named('main_dio')"));
     expect(dataModule.content, contains('Future<Store> asyncCreateStore()'));
     expect(
-        dataModule.content, contains('Box<OrdersBox> ordersBox(Store store)'));
+      dataModule.content,
+      contains('Box<OrdersBox> ordersBox(Store store)'),
+    );
     expect(objectBoxPubspec.content, contains('objectbox_flutter_libs:'));
   });
 
   test('cli patches data module when adding another injectable feature', () {
-    final directory =
-        Directory.systemTemp.createTempSync('clean_architect_cli_patch_');
+    final directory = Directory.systemTemp.createTempSync(
+      'clean_architect_cli_patch_',
+    );
     final previousDirectory = Directory.current;
     addTearDown(() {
       Directory.current = previousDirectory;
@@ -541,7 +612,7 @@ clean_architect:
   structure: layered_packages
   state_management: getx
   network: dio
-  local_storage: objectbox
+  local_storage: hive
   dependency_injection: injectable
   use_asset_generator: true
   use_either_failure: false
@@ -566,17 +637,26 @@ clean_architect:
 
     final dataModule = File('data/lib/data_module.dart').readAsStringSync();
 
-    expect(dataModule,
-        contains("import 'features/orders/local/models/orders_box.dart';"));
-    expect(dataModule,
-        contains("import 'features/auth/local/models/auth_box.dart';"));
-    expect(dataModule, contains('Box<OrdersBox> ordersBox(Store store)'));
-    expect(dataModule, contains('Box<AuthBox> authBox(Store store)'));
+    expect(
+      dataModule,
+      contains("import 'features/orders/local/models/orders_box.dart';"),
+    );
+    expect(
+      dataModule,
+      contains("import 'features/auth/local/models/auth_box.dart';"),
+    );
+    expect(dataModule, contains('Future<Box<OrdersBox>> ordersBox() async'));
+    expect(dataModule, contains('Future<Box<AuthBox>> authBox() async'));
+    expect(dataModule, contains('OrdersBoxAdapter()'));
+    expect(dataModule, contains('AuthBoxAdapter()'));
+    expect('Hive.initFlutter'.allMatches(dataModule), hasLength(2));
+    expect(dataModule, isNot(contains('Future<void> initHive()')));
   });
 
   test('cached function uses sync remote and stream local method names', () {
-    final directory =
-        Directory.systemTemp.createTempSync('clean_architect_cached_names_');
+    final directory = Directory.systemTemp.createTempSync(
+      'clean_architect_cached_names_',
+    );
     final previousDirectory = Directory.current;
     addTearDown(() {
       Directory.current = previousDirectory;
@@ -647,7 +727,7 @@ clean_architect:
       remoteSource,
       repository,
       repositoryImpl,
-      controller
+      controller,
     ]) {
       expect(content, contains('syncDetails()'));
     }
@@ -655,7 +735,7 @@ clean_architect:
       localSource,
       repository,
       repositoryImpl,
-      controller
+      controller,
     ]) {
       expect(content, contains('streamDetails()'));
     }

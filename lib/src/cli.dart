@@ -52,10 +52,11 @@ class CleanArchitectCli {
     final parser = ArgParser()..addFlag('help', abbr: 'h', negatable: false);
 
     parser.addCommand(
-        'init',
-        ArgParser()
-          ..addFlag('force', abbr: 'f', negatable: false)
-          ..addFlag('dry-run', negatable: false));
+      'init',
+      ArgParser()
+        ..addFlag('force', abbr: 'f', negatable: false)
+        ..addFlag('dry-run', negatable: false),
+    );
 
     parser.addCommand('doctor');
 
@@ -70,13 +71,16 @@ class CleanArchitectCli {
         ..addOption('platforms')
         ..addOption('state', allowed: ['getx', 'bloc', 'provider', 'none'])
         ..addOption('network', allowed: ['dio', 'abstract'])
-        ..addOption('storage', allowed: [
-          'secure_storage',
-          'shared_preferences',
-          'hive',
-          'objectbox',
-          'abstract'
-        ])
+        ..addOption(
+          'storage',
+          allowed: [
+            'secure_storage',
+            'shared_preferences',
+            'hive',
+            'objectbox',
+            'abstract',
+          ],
+        )
         ..addOption(
           'dependency-injection',
           abbr: 'd',
@@ -155,10 +159,7 @@ class CleanArchitectCli {
       skipPresentation: skipPresentation,
       operationKind: operationKind,
     )) {
-      _runFlutterCreate(
-        config,
-        dryRun: results['dry-run'] == true,
-      );
+      _runFlutterCreate(config, dryRun: results['dry-run'] == true);
     }
 
     if (operationKind != null) {
@@ -197,7 +198,8 @@ class CleanArchitectCli {
         final feature = featureOption;
         if (args.length < 2 || feature == null || feature.isEmpty) {
           _logger.err(
-              'Usage: clean_architect create usecase <name> --feature <feature>');
+            'Usage: clean_architect create usecase <name> --feature <feature>',
+          );
           return null;
         }
         return generator.useCase(args[1], feature: feature);
@@ -252,7 +254,8 @@ class CleanArchitectCli {
           _stateOverride(results['state'] as String?) ?? config.stateManagement,
       network:
           _networkOverride(results['network'] as String?) ?? config.network,
-      localStorage: _storageOverride(results['storage'] as String?) ??
+      localStorage:
+          _storageOverride(results['storage'] as String?) ??
           config.localStorage,
       useAssetGenerator: config.useAssetGenerator,
       useEitherFailure: results.wasParsed('use-either-failure')
@@ -262,10 +265,12 @@ class CleanArchitectCli {
         createPresentation: results.wasParsed('flutter-create')
             ? results['flutter-create'] == true
             : config.flutter.createPresentation,
-        platforms: _platformsOverride(results['platforms'] as String?) ??
+        platforms:
+            _platformsOverride(results['platforms'] as String?) ??
             config.flutter.platforms,
       ),
-      dependencyInjection: _dependencyInjectionOverride(
+      dependencyInjection:
+          _dependencyInjectionOverride(
             results['dependency-injection'] as String? ??
                 results['di'] as String?,
           ) ??
@@ -337,12 +342,12 @@ class CleanArchitectCli {
       'models',
       '${feature.snake}_box.dart',
     );
-    final boxImportPath =
-        p.relative(boxPath, from: dataLib).split(p.separator).join('/');
+    final boxImportPath = p
+        .relative(boxPath, from: dataLib)
+        .split(p.separator)
+        .join('/');
 
     final imports = <String>[
-      if (config.localStorage == LocalStorage.hive)
-        "import 'package:hive/hive.dart';",
       if (config.localStorage == LocalStorage.objectbox)
         "import 'package:objectbox/objectbox.dart';",
       "import '$boxImportPath';",
@@ -351,7 +356,11 @@ class CleanArchitectCli {
         ? '''
   @lazySingleton
   @preResolve
-  Future<Box<$boxClass>> $methodName() {
+  Future<Box<$boxClass>> $methodName() async {
+    await Hive.initFlutter();
+    if (!Hive.isAdapterRegistered(${stableHiveTypeId(feature.snake)})) {
+      Hive.registerAdapter(${boxClass}Adapter());
+    }
     return Hive.openBox<$boxClass>('${feature.snake}_box');
   }
 '''
@@ -379,9 +388,9 @@ class CleanArchitectCli {
     var result = content;
     for (final import in imports.toSet()) {
       if (result.contains(import)) continue;
-      final lastImport = RegExp(r'''import '[^']+';|import "[^"]+";''')
-          .allMatches(result)
-          .lastOrNull;
+      final lastImport = RegExp(
+        r'''import '[^']+';|import "[^"]+";''',
+      ).allMatches(result).lastOrNull;
       if (lastImport == null) {
         result = '$import\n\n$result';
       } else {
@@ -428,10 +437,7 @@ class CleanArchitectCli {
     return content.endsWith('\n') ? content : '$content\n';
   }
 
-  void _runFlutterCreate(
-    CleanArchitectConfig config, {
-    required bool dryRun,
-  }) {
+  void _runFlutterCreate(CleanArchitectConfig config, {required bool dryRun}) {
     final presentationRoot = _packageRoot(config.paths.presentation);
     final platforms = config.flutter.platforms;
     final args = [
@@ -463,7 +469,8 @@ class CleanArchitectCli {
       exitCode = result.exitCode;
     } on ProcessException catch (error) {
       _logger.warn(
-          'flutter executable not found. Install Flutter or run manually:');
+        'flutter executable not found. Install Flutter or run manually:',
+      );
       _logger.info('cd $presentationRoot && flutter ${args.join(' ')}');
       _logger.detail(error.message);
     }

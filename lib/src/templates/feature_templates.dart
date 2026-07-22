@@ -1,5 +1,6 @@
 import 'package:path/path.dart' as p;
 
+import '../case_utils.dart';
 import '../config.dart';
 import '../generated_file.dart';
 import '../generator.dart';
@@ -10,7 +11,10 @@ List<GeneratedFile> featureTemplates(TemplateContext context) {
     if (context.config.useEitherFailure) _failure(context),
     GeneratedFile(
       path: p.join(
-          context.paths.domain, 'entities', '${feature.snake}_entity.dart'),
+        context.paths.domain,
+        'entities',
+        '${feature.snake}_entity.dart',
+      ),
       content: _entity(context),
     ),
     GeneratedFile(
@@ -31,12 +35,19 @@ List<GeneratedFile> featureTemplates(TemplateContext context) {
     ),
     GeneratedFile(
       path: p.join(
-          context.paths.data, 'remote', 'models', '${feature.snake}_dto.dart'),
+        context.paths.data,
+        'remote',
+        'models',
+        '${feature.snake}_dto.dart',
+      ),
       content: _dto(context),
     ),
     GeneratedFile(
-      path:
-          p.join(context.paths.data, 'mappers', '${feature.snake}_mapper.dart'),
+      path: p.join(
+        context.paths.data,
+        'mappers',
+        '${feature.snake}_mapper.dart',
+      ),
       content: _mapper(context),
     ),
     GeneratedFile(
@@ -49,7 +60,11 @@ List<GeneratedFile> featureTemplates(TemplateContext context) {
     ),
     GeneratedFile(
       path: p.join(
-          context.paths.data, 'local', 'models', '${feature.snake}_box.dart'),
+        context.paths.data,
+        'local',
+        'models',
+        '${feature.snake}_box.dart',
+      ),
       content: _localBox(context),
     ),
     GeneratedFile(
@@ -81,7 +96,11 @@ List<GeneratedFile> featureTemplates(TemplateContext context) {
 GeneratedFile _failure(TemplateContext context) {
   return GeneratedFile(
     path: p.join(
-        _packageRoot(context.paths.domain), 'lib', 'failures', 'failure.dart'),
+      _packageRoot(context.paths.domain),
+      'lib',
+      'failures',
+      'failure.dart',
+    ),
     content: '''
 class Failure {
   const Failure(this.message);
@@ -99,7 +118,7 @@ String _repository(TemplateContext context) {
       : '';
 
   return '''
-${_injectableImport(context)}${eitherImport}import '../entities/${feature.snake}_entity.dart';
+${eitherImport}import '../entities/${feature.snake}_entity.dart';
 
 abstract interface class ${feature.pascal}Repository {
   ${_returnType(context, 'List<${feature.pascal}Entity>')} get${feature.pascal}List();
@@ -132,12 +151,13 @@ ${_lazySingletonAnnotation(context)}class Get${feature.pascal}ListUseCase {
 String _localBox(TemplateContext context) {
   final feature = context.cases;
   return switch (context.config.localStorage) {
-    LocalStorage.hive => '''
-import 'package:hive/hive.dart';
+    LocalStorage.hive =>
+      '''
+import 'package:hive_ce/hive.dart';
 
 part '${feature.snake}_box.g.dart';
 
-@HiveType(typeId: 0)
+@HiveType(typeId: ${stableHiveTypeId(feature.snake)})
 class ${feature.pascal}Box extends HiveObject {
   ${feature.pascal}Box({
     this.id = 0,
@@ -147,7 +167,8 @@ class ${feature.pascal}Box extends HiveObject {
   int id;
 }
 ''',
-    LocalStorage.objectbox => '''
+    LocalStorage.objectbox =>
+      '''
 import 'package:objectbox/objectbox.dart';
 
 @Entity()
@@ -160,7 +181,8 @@ class ${feature.pascal}Box {
   int id;
 }
 ''',
-    _ => '''
+    _ =>
+      '''
 class ${feature.pascal}Box {
   const ${feature.pascal}Box({
     this.id = 0,
@@ -174,11 +196,13 @@ class ${feature.pascal}Box {
 
 String _localSource(TemplateContext context) {
   final feature = context.cases;
-  final annotation =
-      _lazySingletonAsAnnotation(context, '${feature.pascal}LocalDataSource');
+  final annotation = _lazySingletonAsAnnotation(
+    context,
+    '${feature.pascal}LocalDataSource',
+  );
   if (context.config.localStorage == LocalStorage.hive) {
     return '''
-${_injectableImport(context)}import 'package:hive/hive.dart';
+${_injectableImport(context)}import 'package:hive_ce/hive.dart';
 
 import 'models/${feature.snake}_box.dart';
 
@@ -191,8 +215,12 @@ class ${feature.pascal}LocalDataSourceImpl implements ${feature.pascal}LocalData
   const ${feature.pascal}LocalDataSourceImpl(this._box);
 
   final Box<${feature.pascal}Box> _box;
+  Box<${feature.pascal}Box> get box => _box;
 
   static Future<${feature.pascal}LocalDataSource> init() async {
+    if (!Hive.isAdapterRegistered(${stableHiveTypeId(feature.snake)})) {
+      Hive.registerAdapter(${feature.pascal}BoxAdapter());
+    }
     final box = await Hive.openBox<${feature.pascal}Box>('${feature.snake}_box');
     return ${feature.pascal}LocalDataSourceImpl(box);
   }
@@ -220,6 +248,7 @@ class ${feature.pascal}LocalDataSourceImpl implements ${feature.pascal}LocalData
   const ${feature.pascal}LocalDataSourceImpl(this._box);
 
   final Box<${feature.pascal}Box> _box;
+  Box<${feature.pascal}Box> get box => _box;
 
   static ${feature.pascal}LocalDataSource init(Store store) {
     return ${feature.pascal}LocalDataSourceImpl(Box<${feature.pascal}Box>(store));
@@ -267,7 +296,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part '${feature.snake}_entity.freezed.dart';
 
 @freezed
-class ${feature.pascal}Entity with _\$${feature.pascal}Entity {
+abstract class ${feature.pascal}Entity with _\$${feature.pascal}Entity {
   const factory ${feature.pascal}Entity({
     required String id,
   }) = _${feature.pascal}Entity;
@@ -296,7 +325,7 @@ part '${feature.snake}_dto.freezed.dart';
 part '${feature.snake}_dto.g.dart';
 
 @freezed
-class ${feature.pascal}Dto with _\$${feature.pascal}Dto {
+abstract class ${feature.pascal}Dto with _\$${feature.pascal}Dto {
   const factory ${feature.pascal}Dto({
     required String id,
   }) = _${feature.pascal}Dto;
@@ -357,7 +386,7 @@ String _mapper(TemplateContext context) {
   );
 
   return '''
-${_injectableImport(context)}import '$entityImport';
+import '$entityImport';
 import '../remote/models/${feature.snake}_dto.dart';
 
 extension ${feature.pascal}DtoMapper on ${feature.pascal}Dto {
@@ -370,20 +399,32 @@ extension ${feature.pascal}DtoMapper on ${feature.pascal}Dto {
 
 String _remoteDataSource(TemplateContext context) {
   final feature = context.cases;
+  if (context.config.network == NetworkClient.abstract) {
+    return '''
+import 'models/${feature.snake}_dto.dart';
+
+abstract interface class ${feature.pascal}RemoteDataSource {
+  Future<List<${feature.pascal}Dto>> getItems();
+}
+''';
+  }
+
+  final factoryAnnotation =
+      context.config.dependencyInjection == DependencyInjection.injectable
+      ? '  @factoryMethod\n'
+      : '';
   return '''
 import 'package:dio/dio.dart';
-import 'package:injectable/injectable.dart';
 import 'package:retrofit/retrofit.dart';
+${_injectableImport(context)}
 
 import 'models/${feature.snake}_dto.dart';
 
 part '${feature.snake}_remote_data_source.g.dart';
 
-@lazySingleton
-@RestApi(baseUrl: '')
+${_lazySingletonAnnotation(context)}@RestApi(baseUrl: '')
 abstract class ${feature.pascal}RemoteDataSource {
-  @factoryMethod
-  factory ${feature.pascal}RemoteDataSource(@Named("main_dio") Dio dio) = _${feature.pascal}RemoteDataSource;
+$factoryAnnotation  factory ${feature.pascal}RemoteDataSource(${context.config.dependencyInjection == DependencyInjection.injectable ? '@Named("main_dio") ' : ''}Dio dio) = _${feature.pascal}RemoteDataSource;
 
   @GET('/${feature.snake}')
   Future<List<${feature.pascal}Dto>> getItems();
@@ -424,7 +465,8 @@ import '../mappers/${feature.snake}_mapper.dart';
 import '../local/${feature.snake}_local_data_source.dart';
 import '../remote/${feature.snake}_remote_data_source.dart';
 
-${_lazySingletonAnnotation(context)}class ${feature.pascal}RepositoryImpl implements ${feature.pascal}Repository {
+${_lazySingletonAsAnnotation(context, '${feature.pascal}Repository')}
+class ${feature.pascal}RepositoryImpl implements ${feature.pascal}Repository {
   const ${feature.pascal}RepositoryImpl({
     required ${feature.pascal}RemoteDataSource remoteDataSource,
     required ${feature.pascal}LocalDataSource localDataSource,
@@ -453,7 +495,8 @@ GeneratedFile _di(TemplateContext context) {
 
   return GeneratedFile(
     path: p.join(context.paths.di, '${feature.snake}_di.dart'),
-    content: '''
+    content:
+        '''
 import '${_dataImport(context, 'repositories/${feature.snake}_repository_impl.dart')}';
 import '${_dataImport(context, 'local/${feature.snake}_local_data_source.dart')}';
 import '${_dataImport(context, 'remote/${feature.snake}_remote_data_source.dart')}';
@@ -493,13 +536,19 @@ List<GeneratedFile> _presentation(TemplateContext context) {
 
   return [
     GeneratedFile(
-      path: p.join(context.paths.presentation, 'controllers',
-          '${feature.snake}_controller.dart'),
+      path: p.join(
+        context.paths.presentation,
+        'controllers',
+        '${feature.snake}_controller.dart',
+      ),
       content: _controller(context),
     ),
     GeneratedFile(
       path: p.join(
-          context.paths.presentation, 'pages', '${feature.snake}_page.dart'),
+        context.paths.presentation,
+        'pages',
+        '${feature.snake}_page.dart',
+      ),
       content: _page(context),
     ),
   ];
@@ -507,6 +556,47 @@ List<GeneratedFile> _presentation(TemplateContext context) {
 
 String _controller(TemplateContext context) {
   final feature = context.cases;
+  final blocLoad = context.config.useEitherFailure
+      ? '''final result = await _get${feature.pascal}ListUseCase();
+    result.fold(
+      (failure) => emit(state.copyWith(isLoading: false)),
+      (entities) => emit(
+        state.copyWith(
+          isLoading: false,
+          items: entities.map((entity) => entity.id).toList(growable: false),
+        ),
+      ),
+    );'''
+      : '''final entities = await _get${feature.pascal}ListUseCase();
+    emit(
+      state.copyWith(
+        isLoading: false,
+        items: entities.map((entity) => entity.id).toList(growable: false),
+      ),
+    );''';
+  final notifierLoad = context.config.useEitherFailure
+      ? '''final result = await _get${feature.pascal}ListUseCase();
+    result.fold(
+      (failure) => items = const <String>[],
+      (entities) => items =
+          entities.map((entity) => entity.id).toList(growable: false),
+    );'''
+      : '''final entities = await _get${feature.pascal}ListUseCase();
+    items = entities.map((entity) => entity.id).toList(growable: false);''';
+  final assignItems = context.config.stateManagement == StateManagement.getx
+      ? 'items.assignAll(entities.map((entity) => entity.id));'
+      : 'items = entities.map((entity) => entity.id).toList(growable: false);';
+  final clearItems = context.config.stateManagement == StateManagement.getx
+      ? 'items.clear()'
+      : 'items = const <String>[]';
+  final simpleLoad = context.config.useEitherFailure
+      ? '''final result = await _get${feature.pascal}ListUseCase();
+    result.fold(
+      (failure) => $clearItems,
+      (entities) => $assignItems,
+    );'''
+      : '''final entities = await _get${feature.pascal}ListUseCase();
+    $assignItems''';
 
   if (context.config.stateManagement == StateManagement.bloc) {
     return '''
@@ -564,13 +654,7 @@ class ${feature.pascal}Controller extends Bloc<${feature.pascal}Event, ${feature
     Emitter<${feature.pascal}State> emit,
   ) async {
     emit(state.copyWith(isLoading: true));
-    final entities = await _get${feature.pascal}ListUseCase();
-    emit(
-      state.copyWith(
-        isLoading: false,
-        items: entities.map((entity) => entity.id).toList(growable: false),
-      ),
-    );
+    $blocLoad
   }
 }
 ''';
@@ -584,7 +668,7 @@ import 'package:get_it/get_it.dart';
 import '${_domainPresentationImport(context, 'usecases/get_${feature.snake}_list_use_case.dart')}';
 
 class ${feature.pascal}Controller extends ChangeNotifier {
-  var _get${feature.pascal}ListUseCase = GetIt.instance.get<Get${feature.pascal}ListUseCase>();
+  final _get${feature.pascal}ListUseCase = GetIt.instance.get<Get${feature.pascal}ListUseCase>();
 
   var items = const <String>[];
   var isLoading = false;
@@ -592,8 +676,7 @@ class ${feature.pascal}Controller extends ChangeNotifier {
   Future<void> load() async {
     isLoading = true;
     notifyListeners();
-    final entities = await _get${feature.pascal}ListUseCase();
-    items = entities.map((entity) => entity.id).toList(growable: false);
+    $notifierLoad
     isLoading = false;
     notifyListeners();
   }
@@ -613,13 +696,12 @@ ${getxImport}import '${_domainPresentationImport(context, 'usecases/get_${featur
 import 'package:get_it/get_it.dart';
 
 class ${feature.pascal}Controller$baseClass {
-  var _get${feature.pascal}ListUseCase = GetIt.instance.get<Get${feature.pascal}ListUseCase>();
+  final _get${feature.pascal}ListUseCase = GetIt.instance.get<Get${feature.pascal}ListUseCase>();
 
   ${context.config.stateManagement == StateManagement.getx ? 'final items = <String>[].obs;' : 'var items = const <String>[];'}
 
   Future<void> load() async {
-    final entities = await _get${feature.pascal}ListUseCase();
-    ${context.config.stateManagement == StateManagement.getx ? 'items.assignAll(entities.map((entity) => entity.id));' : 'items = entities.map((entity) => entity.id).toList(growable: false);'}
+    $simpleLoad
   }
 }
 ''';
@@ -627,7 +709,8 @@ class ${feature.pascal}Controller$baseClass {
 
 String _page(TemplateContext context) {
   final feature = context.cases;
-  final viewItem = '''
+  final viewItem =
+      '''
 class ${feature.pascal}ViewItem extends StatelessWidget {
   const ${feature.pascal}ViewItem({
     required this.id,

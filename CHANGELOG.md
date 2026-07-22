@@ -1,3 +1,15 @@
+## 0.3.0
+
+- Updated package and generated-project dependencies to current compatible releases.
+- Switched generated Hive storage to the maintained Hive CE packages.
+- Made generated dependency sections conditional so unused frameworks and builders are omitted.
+- Added Freezed 3-compatible entity and DTO declarations.
+- Fixed injectable repository interface registration, async initialization, Dio providers, and Hive box providers.
+- Added stable Hive type IDs and per-box adapter registration for features and operation commands.
+- Made `feature_first` place presentation and DI files under feature-specific folders.
+- Fixed `Either<Failure, T>` handling in generated controllers.
+- Generated real asset directories with `.gitkeep` files.
+
 ## 0.2.3
 
 - Kept one-off feature item widgets inside their pages and moved auth form state into the controller instead of generating standalone view-item files.

@@ -14,23 +14,24 @@ enum LocalStorage {
   sharedPreferences,
   hive,
   objectbox,
-  abstract
+  abstract,
 }
 
 enum DependencyInjection { manual, injectable }
 
 class CleanArchitectConfig {
-  const CleanArchitectConfig(
-      {required this.structure,
-      required this.stateManagement,
-      required this.network,
-      required this.localStorage,
-      required this.dependencyInjection,
-      required this.models,
-      required this.paths,
-      required this.useAssetGenerator,
-      required this.useEitherFailure,
-      required this.flutter});
+  const CleanArchitectConfig({
+    required this.structure,
+    required this.stateManagement,
+    required this.network,
+    required this.localStorage,
+    required this.dependencyInjection,
+    required this.models,
+    required this.paths,
+    required this.useAssetGenerator,
+    required this.useEitherFailure,
+    required this.flutter,
+  });
 
   factory CleanArchitectConfig.defaults() {
     return const CleanArchitectConfig(
@@ -45,10 +46,7 @@ class CleanArchitectConfig {
         createPresentation: false,
         platforms: ['android', 'ios'],
       ),
-      models: ModelConfig(
-        useFreezed: true,
-        useJsonSerializable: true,
-      ),
+      models: ModelConfig(useFreezed: true, useJsonSerializable: true),
       paths: PathConfig(
         domain: 'domain/lib',
         data: 'data/lib/features',
@@ -134,8 +132,11 @@ class CleanArchitectConfig {
         ),
       ),
       models: ModelConfig(
-        useFreezed:
-            _boolValue(models, 'use_freezed', defaults.models.useFreezed),
+        useFreezed: _boolValue(
+          models,
+          'use_freezed',
+          defaults.models.useFreezed,
+        ),
         useJsonSerializable: _boolValue(
           models,
           'use_json_serializable',

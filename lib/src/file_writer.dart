@@ -32,8 +32,9 @@ class FileWriter {
 
       target.parent.createSync(recursive: true);
       target.writeAsStringSync(_withTrailingNewline(file.content));
-      logger
-          .success('${target.existsSync() ? 'wrote' : 'created'} ${file.path}');
+      logger.success(
+        '${target.existsSync() ? 'wrote' : 'created'} ${file.path}',
+      );
     }
   }
 

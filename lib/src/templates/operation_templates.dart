@@ -34,18 +34,22 @@ List<GeneratedFile> operationTemplates(
     final remoteMethodName = _cachedRemoteMethodName(operation);
     final localMethodName = _cachedLocalMethodName(operation);
     files
-      ..add(_useCase(
-        context,
-        operation,
-        useCaseName: NameCases(remoteMethodName),
-        repositoryMethodName: remoteMethodName,
-      ))
-      ..add(_useCase(
-        context,
-        operation,
-        useCaseName: NameCases(localMethodName),
-        repositoryMethodName: localMethodName,
-      ));
+      ..add(
+        _useCase(
+          context,
+          operation,
+          useCaseName: NameCases(remoteMethodName),
+          repositoryMethodName: remoteMethodName,
+        ),
+      )
+      ..add(
+        _useCase(
+          context,
+          operation,
+          useCaseName: NameCases(localMethodName),
+          repositoryMethodName: localMethodName,
+        ),
+      );
   } else {
     files.add(_useCase(context, operation));
   }
@@ -65,7 +69,11 @@ enum OperationKind {
 GeneratedFile _failure(TemplateContext context) {
   return GeneratedFile(
     path: p.join(
-        _packageRoot(context.paths.domain), 'lib', 'failures', 'failure.dart'),
+      _packageRoot(context.paths.domain),
+      'lib',
+      'failures',
+      'failure.dart',
+    ),
     content: '''
 class Failure {
   const Failure(this.message);
@@ -79,7 +87,10 @@ class Failure {
 GeneratedFile _entity(TemplateContext context, NameCases operation) {
   return GeneratedFile(
     path: p.join(
-        context.paths.domain, 'entities', '${operation.snake}_entity.dart'),
+      context.paths.domain,
+      'entities',
+      '${operation.snake}_entity.dart',
+    ),
     content: context.config.models.useFreezed
         ? '''
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -87,7 +98,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part '${operation.snake}_entity.freezed.dart';
 
 @freezed
-class ${operation.pascal}Entity with _\$${operation.pascal}Entity {
+abstract class ${operation.pascal}Entity with _\$${operation.pascal}Entity {
   const factory ${operation.pascal}Entity({
     required String id,
   }) = _${operation.pascal}Entity;
@@ -121,7 +132,7 @@ part '${operation.snake}_dto.freezed.dart';
 part '${operation.snake}_dto.g.dart';
 
 @freezed
-class ${operation.pascal}Dto with _\$${operation.pascal}Dto {
+abstract class ${operation.pascal}Dto with _\$${operation.pascal}Dto {
   const factory ${operation.pascal}Dto({
     required String id,
   }) = _${operation.pascal}Dto;
@@ -159,12 +170,13 @@ GeneratedFile _box(TemplateContext context, NameCases operation) {
       '${operation.snake}_box.dart',
     ),
     content: switch (context.config.localStorage) {
-      LocalStorage.hive => '''
-import 'package:hive/hive.dart';
+      LocalStorage.hive =>
+        '''
+import 'package:hive_ce/hive.dart';
 
 part '${operation.snake}_box.g.dart';
 
-@HiveType(typeId: 0)
+@HiveType(typeId: ${stableHiveTypeId('${context.cases.snake}_${operation.snake}')})
 class ${operation.pascal}Box extends HiveObject {
   ${operation.pascal}Box({
     this.id = 0,
@@ -174,7 +186,8 @@ class ${operation.pascal}Box extends HiveObject {
   int id;
 }
 ''',
-      LocalStorage.objectbox => '''
+      LocalStorage.objectbox =>
+        '''
 import 'package:objectbox/objectbox.dart';
 
 @Entity()
@@ -187,7 +200,8 @@ class ${operation.pascal}Box {
   int id;
 }
 ''',
-      _ => '''
+      _ =>
+        '''
 class ${operation.pascal}Box {
   const ${operation.pascal}Box({
     this.id = 0,
@@ -218,9 +232,13 @@ GeneratedFile _remoteMapper(
       : '';
 
   return GeneratedFile(
-    path:
-        p.join(context.paths.data, 'mappers', '${operation.snake}_mapper.dart'),
-    content: '''
+    path: p.join(
+      context.paths.data,
+      'mappers',
+      '${operation.snake}_mapper.dart',
+    ),
+    content:
+        '''
 import '${_domainImport(context, 'entities/${operation.snake}_entity.dart')}';
 ${boxImport}import '../remote/models/${operation.snake}_dto.dart';
 
@@ -241,8 +259,12 @@ GeneratedFile _localMapper(
   if (kind == OperationKind.cached) {
     return GeneratedFile(
       path: p.join(
-          context.paths.data, 'mappers', '${operation.snake}_box_mapper.dart'),
-      content: '''
+        context.paths.data,
+        'mappers',
+        '${operation.snake}_box_mapper.dart',
+      ),
+      content:
+          '''
 import '${_domainImport(context, 'entities/${operation.snake}_entity.dart')}';
 import '../local/models/${operation.snake}_box.dart';
 
@@ -256,9 +278,13 @@ extension ${operation.pascal}BoxMapper on ${operation.pascal}Box {
   }
 
   return GeneratedFile(
-    path:
-        p.join(context.paths.data, 'mappers', '${operation.snake}_mapper.dart'),
-    content: '''
+    path: p.join(
+      context.paths.data,
+      'mappers',
+      '${operation.snake}_mapper.dart',
+    ),
+    content:
+        '''
 import '${_domainImport(context, 'entities/${operation.snake}_entity.dart')}';
 import '../local/models/${operation.snake}_box.dart';
 
@@ -288,7 +314,8 @@ GeneratedFile _useCase(
 
   return GeneratedFile(
     path: p.join(context.paths.domain, 'usecases', fileName),
-    content: '''
+    content:
+        '''
 ${eitherImport}import '../entities/${operation.snake}_entity.dart';
 import '../repositories/${context.cases.snake}_repository.dart';
 

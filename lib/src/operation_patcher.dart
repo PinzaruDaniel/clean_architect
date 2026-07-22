@@ -39,7 +39,12 @@ class OperationPatcher {
     _patchRepository(paths.domain, feature, operation, kind);
     _patchRepositoryImpl(paths.data, paths.domain, feature, operation, kind);
     _patchController(
-        paths.presentation, paths.domain, feature, operation, kind);
+      paths.presentation,
+      paths.domain,
+      feature,
+      operation,
+      kind,
+    );
   }
 
   void _patchRemoteSource(
@@ -48,33 +53,55 @@ class OperationPatcher {
     NameCases operation,
     OperationKind kind,
   ) {
-    final path =
-        p.join(dataPath, 'remote', '${feature.snake}_remote_data_source.dart');
+    final path = p.join(
+      dataPath,
+      'remote',
+      '${feature.snake}_remote_data_source.dart',
+    );
     final importLine = "import 'models/${operation.snake}_dto.dart';";
     final methodName = _remoteMethodName(operation, kind);
-    final snippet = '''
+    final annotation = config.network == NetworkClient.dio
+        ? "  @GET('/${feature.snake}/${operation.snake}')\n"
+        : '';
+    final snippet =
+        '''
 
-  @GET('/${feature.snake}/${operation.snake}')
-  Future<${operation.pascal}Dto> $methodName();
+$annotation  Future<${operation.pascal}Dto> $methodName();
 ''';
-    _patchClassFile(
-      path: path,
-      createContent: '''
+    final injectableImport =
+        config.dependencyInjection == DependencyInjection.injectable
+        ? "import 'package:injectable/injectable.dart';\n"
+        : '';
+    final classAnnotation =
+        config.dependencyInjection == DependencyInjection.injectable
+        ? '@lazySingleton\n'
+        : '';
+    final factoryAnnotation =
+        config.dependencyInjection == DependencyInjection.injectable
+        ? '  @factoryMethod\n'
+        : '';
+    final createContent = config.network == NetworkClient.abstract
+        ? '''
+$importLine
+
+abstract interface class ${feature.pascal}RemoteDataSource {$snippet}
+'''
+        : '''
 import 'package:dio/dio.dart';
-import 'package:injectable/injectable.dart';
-import 'package:retrofit/retrofit.dart';
+${injectableImport}import 'package:retrofit/retrofit.dart';
 
 $importLine
 
 part '${feature.snake}_remote_data_source.g.dart';
 
-@lazySingleton
-@RestApi(baseUrl: '')
+$classAnnotation@RestApi(baseUrl: '')
 abstract class ${feature.pascal}RemoteDataSource {
-  @factoryMethod
-  factory ${feature.pascal}RemoteDataSource(@Named("main_dio") Dio dio) = _${feature.pascal}RemoteDataSource;
+$factoryAnnotation  factory ${feature.pascal}RemoteDataSource(${config.dependencyInjection == DependencyInjection.injectable ? '@Named("main_dio") ' : ''}Dio dio) = _${feature.pascal}RemoteDataSource;
 $snippet}
-''',
+''';
+    _patchClassFile(
+      path: path,
+      createContent: createContent,
       imports: [importLine],
       duplicateNeedle: 'Future<${operation.pascal}Dto> $methodName()',
       snippet: snippet,
@@ -87,17 +114,22 @@ $snippet}
     NameCases operation,
     OperationKind kind,
   ) {
-    final path =
-        p.join(dataPath, 'local', '${feature.snake}_local_data_source.dart');
+    final path = p.join(
+      dataPath,
+      'local',
+      '${feature.snake}_local_data_source.dart',
+    );
     final importLine = "import 'models/${operation.snake}_box.dart';";
     final methodName = kind == OperationKind.cached
         ? _localMethodName(operation)
         : operation.camel;
-    final abstractSnippet = '''
+    final abstractSnippet =
+        '''
 
   Future<${operation.pascal}Box> $methodName();
 ''';
-    final implSnippet = '''
+    final implSnippet =
+        '''
 
   @override
   Future<${operation.pascal}Box> $methodName() async {
@@ -108,15 +140,20 @@ $snippet}
 
     final file = File(path);
     if (!file.existsSync()) {
+      final injectableImport =
+          config.dependencyInjection == DependencyInjection.injectable
+          ? "import 'package:injectable/injectable.dart';\n\n"
+          : '';
+      final implementationAnnotation =
+          config.dependencyInjection == DependencyInjection.injectable
+          ? '@LazySingleton(as: ${feature.pascal}LocalDataSource)\n'
+          : '';
       _write(path, '''
-import 'package:injectable/injectable.dart';
-
-$importLine
+$injectableImport$importLine
 
 abstract class ${feature.pascal}LocalDataSource {$abstractSnippet}
 
-@LazySingleton(as: ${feature.pascal}LocalDataSource)
-class ${feature.pascal}LocalDataSourceImpl implements ${feature.pascal}LocalDataSource {
+${implementationAnnotation}class ${feature.pascal}LocalDataSourceImpl implements ${feature.pascal}LocalDataSource {
   const ${feature.pascal}LocalDataSourceImpl();$implSnippet}
 ''');
       return;
@@ -158,7 +195,11 @@ class ${feature.pascal}LocalDataSourceImpl implements ${feature.pascal}LocalData
         ? '''
   @lazySingleton
   @preResolve
-  Future<Box<$boxClass>> $methodName() {
+  Future<Box<$boxClass>> $methodName() async {
+    await Hive.initFlutter();
+    if (!Hive.isAdapterRegistered(${stableHiveTypeId('${_featureNameFromDataPath(dataPath)}_${operation.snake}')})) {
+      Hive.registerAdapter(${boxClass}Adapter());
+    }
     return Hive.openBox<$boxClass>('${operation.snake}_box');
   }
 '''
@@ -169,7 +210,7 @@ class ${feature.pascal}LocalDataSourceImpl implements ${feature.pascal}LocalData
 
     final file = File(path);
     if (!file.existsSync()) {
-      _write(path, _createDataModule(importLine, snippet));
+      _write(path, _createDataModule(importLine, snippet, operation, dataPath));
       return;
     }
 
@@ -180,19 +221,25 @@ class ${feature.pascal}LocalDataSourceImpl implements ${feature.pascal}LocalData
     }
 
     content = _ensureImports(content, [importLine]);
-    content =
-        _insertBeforeClassEnd(content, 'abstract class DataModule', snippet);
+    content = _insertBeforeClassEnd(
+      content,
+      'abstract class DataModule',
+      snippet,
+    );
     _write(path, content);
   }
 
-  String _createDataModule(String featureImport, String boxSnippet) {
+  String _createDataModule(
+    String featureImport,
+    String boxSnippet,
+    NameCases operation,
+    String dataPath,
+  ) {
     final imports = <String>[
       "import 'package:injectable/injectable.dart';",
       if (config.network == NetworkClient.dio) "import 'package:dio/dio.dart';",
       if (config.localStorage == LocalStorage.hive)
-        "import 'package:hive/hive.dart';",
-      if (config.localStorage == LocalStorage.hive)
-        "import 'package:hive_flutter/hive_flutter.dart';",
+        "import 'package:hive_ce_flutter/hive_flutter.dart';",
       if (config.localStorage == LocalStorage.objectbox)
         "import 'package:objectbox/objectbox.dart';",
       if (config.localStorage == LocalStorage.objectbox)
@@ -219,12 +266,7 @@ class ${feature.pascal}LocalDataSourceImpl implements ${feature.pascal}LocalData
 '''
         : '';
     final init = config.localStorage == LocalStorage.hive
-        ? '''
-  @preResolve
-  Future<void> initHive() async {
-    await Hive.initFlutter();
-  }
-'''
+        ? ''
         : '''
   @lazySingleton
   @factoryMethod
@@ -251,21 +293,26 @@ $dio$init$boxSnippet
     NameCases operation,
     OperationKind kind,
   ) {
-    final path =
-        p.join(domainPath, 'repositories', '${feature.snake}_repository.dart');
+    final path = p.join(
+      domainPath,
+      'repositories',
+      '${feature.snake}_repository.dart',
+    );
     final returnType = _returnType(operation);
     final imports = <String>[
       "import '../entities/${operation.snake}_entity.dart';",
       if (config.useEitherFailure) "import 'package:dartz/dartz.dart';",
       if (config.useEitherFailure) "import '../failures/failure.dart';",
     ];
-    final methods = _repositoryMethodNames(operation, kind)
-        .map((method) => '\n  $returnType $method();\n')
-        .join();
+    final methods = _repositoryMethodNames(
+      operation,
+      kind,
+    ).map((method) => '\n  $returnType $method();\n').join();
 
     _patchClassFile(
       path: path,
-      createContent: '''
+      createContent:
+          '''
 ${imports.join('\n')}
 
 abstract interface class ${feature.pascal}Repository {$methods}
@@ -284,7 +331,10 @@ abstract interface class ${feature.pascal}Repository {$methods}
     OperationKind kind,
   ) {
     final path = p.join(
-        dataPath, 'repositories', '${feature.snake}_repository_impl.dart');
+      dataPath,
+      'repositories',
+      '${feature.snake}_repository_impl.dart',
+    );
     final returnType = _returnType(operation);
     final imports = <String>[
       "import '${_packageImport(domainPath, 'entities/${operation.snake}_entity.dart')}';",
@@ -307,7 +357,8 @@ abstract interface class ${feature.pascal}Repository {$methods}
 
     _patchClassFile(
       path: path,
-      createContent: '''
+      createContent:
+          '''
 ${imports.toSet().join('\n')}
 
 class ${feature.pascal}RepositoryImpl implements ${feature.pascal}Repository {
@@ -334,7 +385,10 @@ class ${feature.pascal}RepositoryImpl implements ${feature.pascal}Repository {
     OperationKind kind,
   ) {
     final path = p.join(
-        presentationPath, 'controllers', '${feature.snake}_controller.dart');
+      presentationPath,
+      'controllers',
+      '${feature.snake}_controller.dart',
+    );
     final remoteMethodName = _remoteMethodName(operation, kind);
     final localMethodName = _localMethodName(operation);
     final remoteUseCase = NameCases(remoteMethodName);
@@ -368,19 +422,27 @@ class ${feature.pascal}RepositoryImpl implements ${feature.pascal}Repository {
         "import '${_packageImport(domainPath, 'usecases/${useCase.fileName}')}';",
     ];
     final fields = useCases
-        .map((useCase) =>
-            '  var ${useCase.fieldName} = GetIt.instance.get<${useCase.className}>();')
+        .map(
+          (useCase) =>
+              '  var ${useCase.fieldName} = GetIt.instance.get<${useCase.className}>();',
+        )
         .join('\n');
-    final methods = useCases.map((useCase) => '''
+    final methods = useCases
+        .map(
+          (useCase) =>
+              '''
 
   Future<void> ${useCase.methodName}() async {
     await ${useCase.fieldName}();
   }
-''').join();
+''',
+        )
+        .join();
 
     _patchClassFile(
       path: path,
-      createContent: '''
+      createContent:
+          '''
 ${imports.join('\n')}
 
 class ${feature.pascal}Controller {
@@ -397,9 +459,9 @@ $fields$methods}
       OperationKind.remote => [operation.camel],
       OperationKind.local => [operation.camel],
       OperationKind.cached => [
-          _remoteMethodName(operation, kind),
-          _localMethodName(operation),
-        ],
+        _remoteMethodName(operation, kind),
+        _localMethodName(operation),
+      ],
     };
   }
 
@@ -509,9 +571,9 @@ ${_wrapReturn('final box = await _localDataSource.$sourceMethod();', 'box.toEnti
     var result = content;
     for (final import in imports.toSet()) {
       if (result.contains(import)) continue;
-      final lastImport = RegExp(r'''import '[^']+';|import "[^"]+";''')
-          .allMatches(result)
-          .lastOrNull;
+      final lastImport = RegExp(
+        r'''import '[^']+';|import "[^"]+";''',
+      ).allMatches(result).lastOrNull;
       if (lastImport == null) {
         result = '$import\n\n$result';
       } else {

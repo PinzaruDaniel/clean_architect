@@ -25,10 +25,7 @@ void main() {
         createPresentation: false,
         platforms: ['android', 'ios'],
       ),
-      models: ModelConfig(
-        useFreezed: false,
-        useJsonSerializable: false,
-      ),
+      models: ModelConfig(useFreezed: false, useJsonSerializable: false),
       paths: PathConfig(
         domain: 'domain/lib',
         data: 'data/lib/features',
@@ -43,5 +40,35 @@ void main() {
     expect(paths.data, 'data/lib/features/auth');
     expect(paths.presentation, 'curier_rapid/lib');
     expect(paths.di, 'di/lib');
+  });
+
+  test('resolves feature-first presentation and DI paths', () {
+    const config = CleanArchitectConfig(
+      structure: ProjectStructure.featureFirst,
+      stateManagement: StateManagement.none,
+      network: NetworkClient.abstract,
+      localStorage: LocalStorage.abstract,
+      dependencyInjection: DependencyInjection.manual,
+      useAssetGenerator: false,
+      useEitherFailure: false,
+      flutter: FlutterConfig(
+        createPresentation: false,
+        platforms: ['android', 'ios'],
+      ),
+      models: ModelConfig(useFreezed: false, useJsonSerializable: false),
+      paths: PathConfig(
+        domain: 'domain/lib',
+        data: 'data/lib/features',
+        presentation: 'presentation/lib',
+        di: 'di/lib',
+      ),
+    );
+
+    final paths = PathResolver(config).resolve('orders');
+
+    expect(paths.domain, 'domain/lib/features/orders');
+    expect(paths.data, 'data/lib/features/orders');
+    expect(paths.presentation, 'presentation/lib/features/orders');
+    expect(paths.di, 'di/lib/features/orders');
   });
 }

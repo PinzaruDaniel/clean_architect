@@ -48,10 +48,7 @@ class CleanArchitectGenerator {
     ];
   }
 
-  List<GeneratedFile> feature(
-    String name, {
-    bool skipPresentation = false,
-  }) {
+  List<GeneratedFile> feature(String name, {bool skipPresentation = false}) {
     final cases = NameCases(name);
     final paths = _paths.resolve(cases.snake);
     final context = TemplateContext(
@@ -82,11 +79,7 @@ class CleanArchitectGenerator {
       skipPresentation: false,
     );
 
-    return operationTemplates(
-      context,
-      operation: operationCases,
-      kind: kind,
-    );
+    return operationTemplates(context, operation: operationCases, kind: kind);
   }
 
   List<GeneratedFile> useCase(String name, {required String feature}) {
@@ -101,7 +94,8 @@ class CleanArchitectGenerator {
           'usecases',
           '${useCaseCases.snake}_use_case.dart',
         ),
-        content: '''
+        content:
+            '''
 class ${useCaseCases.pascal}UseCase {
   const ${useCaseCases.pascal}UseCase();
 
@@ -121,8 +115,12 @@ class ${useCaseCases.pascal}UseCase {
     return [
       GeneratedFile(
         path: p.join(
-            paths.domain, 'repositories', '${cases.snake}_repository.dart'),
-        content: '''
+          paths.domain,
+          'repositories',
+          '${cases.snake}_repository.dart',
+        ),
+        content:
+            '''
 abstract interface class ${cases.pascal}Repository {
   Future<void> execute();
 }
@@ -134,7 +132,8 @@ abstract interface class ${cases.pascal}Repository {
           'repositories',
           '${cases.snake}_repository_impl.dart',
         ),
-        content: '''
+        content:
+            '''
 import '${_packageImport(paths.domain, 'repositories/${cases.snake}_repository.dart')}';
 
 class ${cases.pascal}RepositoryImpl implements ${cases.pascal}Repository {

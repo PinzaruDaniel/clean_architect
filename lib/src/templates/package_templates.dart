@@ -1,8 +1,20 @@
 import 'package:path/path.dart' as p;
 
+import '../case_utils.dart';
 import '../config.dart';
 import '../generated_file.dart';
 import '../generator.dart';
+
+const _sdkConstraint = '^3.11.0';
+const _flutterConstraint = '>=3.27.0';
+const _buildRunnerVersion = '^2.15.1';
+const _freezedVersion = '^3.2.5';
+const _freezedAnnotationVersion = '^3.1.0';
+const _jsonAnnotationVersion = '^4.12.0';
+const _jsonSerializableVersion = '^6.14.0';
+const _injectableVersion = '^3.0.0';
+const _injectableGeneratorVersion = '^3.0.2';
+const _getItVersion = '^9.2.1';
 
 List<GeneratedFile> packageTemplates(
   TemplateContext context, {
@@ -33,42 +45,73 @@ List<GeneratedFile> packageTemplates(
       ),
       GeneratedFile(
         path: p.join(
-            _packageRoot(context.paths.presentation), 'assets', 'images'),
-        content: '',
-      ),
-      GeneratedFile(
-        path:
-            p.join(_packageRoot(context.paths.presentation), 'assets', 'icons'),
+          _packageRoot(context.paths.presentation),
+          'assets',
+          'images',
+          '.gitkeep',
+        ),
         content: '',
       ),
       GeneratedFile(
         path: p.join(
-            _packageRoot(context.paths.presentation), 'lib', 'main.dart'),
+          _packageRoot(context.paths.presentation),
+          'assets',
+          'icons',
+          '.gitkeep',
+        ),
+        content: '',
+      ),
+      GeneratedFile(
+        path: p.join(
+          _packageRoot(context.paths.presentation),
+          'lib',
+          'main.dart',
+        ),
         content: _presentationMain(),
       ),
       GeneratedFile(
-        path: p.join(_packageRoot(context.paths.presentation), 'lib', 'widgets',
-            '.gitkeep'),
+        path: p.join(
+          _packageRoot(context.paths.presentation),
+          'lib',
+          'widgets',
+          '.gitkeep',
+        ),
         content: '',
       ),
       GeneratedFile(
-        path: p.join(_packageRoot(context.paths.presentation), 'lib', 'pages',
-            '.gitkeep'),
+        path: p.join(
+          _packageRoot(context.paths.presentation),
+          'lib',
+          'pages',
+          '.gitkeep',
+        ),
         content: '',
       ),
       GeneratedFile(
-        path: p.join(_packageRoot(context.paths.presentation), 'lib', 'utils',
-            '.gitkeep'),
+        path: p.join(
+          _packageRoot(context.paths.presentation),
+          'lib',
+          'utils',
+          '.gitkeep',
+        ),
         content: '',
       ),
       GeneratedFile(
-        path: p.join(_packageRoot(context.paths.presentation), 'lib',
-            'controllers', '.gitkeep'),
+        path: p.join(
+          _packageRoot(context.paths.presentation),
+          'lib',
+          'controllers',
+          '.gitkeep',
+        ),
         content: '',
       ),
       GeneratedFile(
-        path: p.join(_packageRoot(context.paths.presentation), 'lib',
-            'constants', '.gitkeep'),
+        path: p.join(
+          _packageRoot(context.paths.presentation),
+          'lib',
+          'constants',
+          '.gitkeep',
+        ),
         content: '',
       ),
       GeneratedFile(
@@ -82,11 +125,15 @@ include: package:flutter_lints/flutter.yaml
       ),
     ]);
     if (context.config.useAssetGenerator) {
-      files.add(GeneratedFile(
-        path: p.join(_packageRoot(context.paths.presentation),
-            'asset_generator_kit.yaml'),
-        content: _assetGeneratorKit(),
-      ));
+      files.add(
+        GeneratedFile(
+          path: p.join(
+            _packageRoot(context.paths.presentation),
+            'asset_generator_kit.yaml',
+          ),
+          content: _assetGeneratorKit(),
+        ),
+      );
     }
   }
 
@@ -118,9 +165,7 @@ String _dataModule(TemplateContext context) {
     if (context.config.network == NetworkClient.dio)
       "import 'package:dio/dio.dart';",
     if (context.config.localStorage == LocalStorage.hive)
-      "import 'package:hive/hive.dart';",
-    if (context.config.localStorage == LocalStorage.hive)
-      "import 'package:hive_flutter/hive_flutter.dart';",
+      "import 'package:hive_ce_flutter/hive_flutter.dart';",
     if (context.config.localStorage == LocalStorage.objectbox)
       "import 'package:objectbox/objectbox.dart';",
     if (context.config.localStorage == LocalStorage.objectbox)
@@ -184,15 +229,15 @@ String _sharedPreferencesProvider() {
 String _hiveProviders(TemplateContext context) {
   final boxClass = '${context.cases.pascal}Box';
   final boxName = '${context.cases.camel}Box';
+  final typeId = stableHiveTypeId(context.cases.snake);
   return '''
-  @preResolve
-  Future<void> initHive() async {
-    await Hive.initFlutter();
-  }
-
   @lazySingleton
   @preResolve
-  Future<Box<$boxClass>> $boxName() {
+  Future<Box<$boxClass>> $boxName() async {
+    await Hive.initFlutter();
+    if (!Hive.isAdapterRegistered($typeId)) {
+      Hive.registerAdapter(${boxClass}Adapter());
+    }
     return Hive.openBox<$boxClass>('${context.cases.snake}_box');
   }
 ''';
@@ -243,7 +288,7 @@ import 'injector.config.dart';
 
 @InjectableInit()
 Future<void> configureDependencies(GetIt get) async {
-  return get.init();
+  await get.init();
 }
 ''',
     ),
@@ -265,20 +310,21 @@ Future<void> initDi({required GetIt get}) async {
 
 String _domainPubspec(TemplateContext context) {
   final dependencies = <String>[];
+  final devDependencies = <String>[];
   if (context.config.useEitherFailure) {
     dependencies.add('  dartz: ^0.10.1');
   }
   if (context.config.models.useFreezed) {
-    dependencies.add('  freezed: ^3.2.5');
-    dependencies.add('  freezed_annotation: ^3.1.0');
+    dependencies.add('  freezed_annotation: $_freezedAnnotationVersion');
+    devDependencies.add('  build_runner: $_buildRunnerVersion');
+    devDependencies.add('  freezed: $_freezedVersion');
   }
   if (context.config.dependencyInjection == DependencyInjection.injectable) {
-    dependencies.add('  injectable: ^3.0.0');
-    dependencies.add('  get_it: ^9.2.1');
+    dependencies.add('  injectable: $_injectableVersion');
+    dependencies.add('  get_it: $_getItVersion');
+    devDependencies.add('  build_runner: $_buildRunnerVersion');
+    devDependencies.add('  injectable_generator: $_injectableGeneratorVersion');
   }
-  final dependenciesBlock = dependencies.isEmpty
-      ? ''
-      : '\ndependencies:\n${dependencies.join('\n')}\n\ndev_dependencies:\n  build_runner: ^2.15.0\n  injectable_generator: \n';
 
   return '''
 name: ${_packageName(context.paths.domain)}
@@ -286,8 +332,8 @@ description: Domain layer generated by clean_architect.
 publish_to: none
 
 environment:
-  sdk: ^3.6.0
-$dependenciesBlock''';
+  sdk: $_sdkConstraint
+${_section('dependencies', dependencies)}${_section('dev_dependencies', devDependencies)}''';
 }
 
 String _dataPubspec(TemplateContext context) {
@@ -295,44 +341,61 @@ String _dataPubspec(TemplateContext context) {
     "  ${_packageName(context.paths.domain)}:",
     '    path: ../${_packageName(context.paths.domain)}',
   ];
+  final devDependencies = <String>[];
+  final requiresFlutter = context.config.localStorage != LocalStorage.abstract;
+  final requiresBuildRunner =
+      context.config.network == NetworkClient.dio ||
+      context.config.models.useFreezed ||
+      context.config.models.useJsonSerializable ||
+      context.config.dependencyInjection == DependencyInjection.injectable ||
+      context.config.localStorage == LocalStorage.hive ||
+      context.config.localStorage == LocalStorage.objectbox;
+
+  if (requiresFlutter) {
+    dependencies.insert(0, '  flutter:\n    sdk: flutter');
+  }
 
   if (context.config.useEitherFailure) {
     dependencies.add('  dartz: ^0.10.1');
   }
   if (context.config.network == NetworkClient.dio) {
-    dependencies.add('  dio: ^5.9.1');
-    dependencies.add('  retrofit: ');
+    dependencies.add('  dio: ^5.10.0');
+    dependencies.add('  retrofit: ^4.9.2');
+    devDependencies.add('  retrofit_generator: ^10.2.8');
   }
   if (context.config.dependencyInjection == DependencyInjection.injectable) {
-    dependencies.add('  injectable: ^3.0.0');
-    dependencies.add('  get_it: ^9.2.1');
+    dependencies.add('  injectable: $_injectableVersion');
+    dependencies.add('  get_it: $_getItVersion');
+    devDependencies.add('  injectable_generator: $_injectableGeneratorVersion');
   }
   if (context.config.localStorage == LocalStorage.secureStorage) {
-    dependencies.insert(0, '  flutter:\n    sdk: flutter');
-    dependencies.add('  flutter_secure_storage: ^9.2.2');
+    dependencies.add('  flutter_secure_storage: ^10.3.1');
   }
   if (context.config.localStorage == LocalStorage.sharedPreferences) {
-    dependencies.insert(0, '  flutter:\n    sdk: flutter');
-    dependencies.add('  shared_preferences: ^2.5.3');
+    dependencies.add('  shared_preferences: ^2.5.5');
   }
   if (context.config.localStorage == LocalStorage.hive) {
-    dependencies.insert(0, '  flutter:\n    sdk: flutter');
-    dependencies.add('  hive: ^2.2.3');
-    dependencies.add('  hive_flutter: ^1.1.0');
+    dependencies.add('  hive_ce: ^2.19.3');
+    dependencies.add('  hive_ce_flutter: ^2.3.4');
+    devDependencies.add('  hive_ce_generator: 1.11.1');
   }
   if (context.config.localStorage == LocalStorage.objectbox) {
-    dependencies.insert(0, '  flutter:\n    sdk: flutter');
-    dependencies.add('  objectbox: ^4.1.0');
-    dependencies.add('  objectbox_flutter_libs: ^4.1.0');
-    dependencies.add('  path_provider: ^2.1.5');
+    dependencies.add('  objectbox: ^5.3.2');
+    dependencies.add('  objectbox_flutter_libs: ^5.3.2');
+    dependencies.add('  path_provider: ^2.1.6');
+    devDependencies.add('  objectbox_generator: ^5.3.2');
   }
   if (context.config.models.useFreezed) {
-    dependencies.add('  freezed: ^3.2.5');
-    dependencies.add('  freezed_annotation: ^3.1.0');
+    dependencies.add('  freezed_annotation: $_freezedAnnotationVersion');
+    devDependencies.add('  freezed: $_freezedVersion');
   }
   if (context.config.models.useJsonSerializable ||
       context.config.models.useFreezed) {
-    dependencies.add('  json_annotation: ^4.12.0');
+    dependencies.add('  json_annotation: $_jsonAnnotationVersion');
+    devDependencies.add('  json_serializable: $_jsonSerializableVersion');
+  }
+  if (requiresBuildRunner) {
+    devDependencies.insert(0, '  build_runner: $_buildRunnerVersion');
   }
 
   return '''
@@ -341,18 +404,13 @@ description: Data layer generated by clean_architect.
 publish_to: none
 
 environment:
-  sdk: ^3.6.0
+  sdk: $_sdkConstraint
+${requiresFlutter ? "  flutter: '$_flutterConstraint'\n" : ''}
 
 dependencies:
 ${dependencies.join('\n')}
 
-dev_dependencies:
-  build_runner: ^2.15.0
-  retrofit_generator:
-  json_serializable: ^6.14.0
-  injectable_generator: 
-  objectbox_generator:
-  hive_generator:
+${_section('dev_dependencies', devDependencies)}
 ''';
 }
 
@@ -362,12 +420,8 @@ String _diPubspec(TemplateContext context) {
     '    path: ../${_packageName(context.paths.domain)}',
     '  ${_packageName(context.paths.data)}:',
     '    path: ../${_packageName(context.paths.data)}',
+    '  get_it: $_getItVersion',
   ];
-
-  if (context.config.dependencyInjection == DependencyInjection.injectable) {
-    dependencies.add('  injectable: ^3.0.0');
-    dependencies.add('  get_it: ^9.2.0');
-  }
 
   return '''
 name: ${_packageName(context.paths.di)}
@@ -375,17 +429,10 @@ description: Dependency injection layer generated by clean_architect.
 publish_to: none
 
 environment:
-  sdk: ^3.6.0
+  sdk: $_sdkConstraint
 
 dependencies:
 ${dependencies.join('\n')}
-
-dev_dependencies:
-  build_runner: ^2.4.13
-  retrofit_generator: 
-  json_serializable: ^6.12.0
-  freezed: ^2.5.7
-  injectable_generator: ^2.6.2
 ''';
 }
 
@@ -399,24 +446,26 @@ String _presentationPubspec(TemplateContext context) {
     '    path: ../${_packageName(context.paths.data)}',
     "  ${_packageName(context.paths.di)}:",
     '    path: ../${_packageName(context.paths.di)}',
+    '  get_it: $_getItVersion',
   ];
 
   if (context.config.stateManagement == StateManagement.getx) {
-    dependencies.add('  get: ^4.7.2');
+    dependencies.add('  get: ^4.7.3');
   }
   if (context.config.stateManagement == StateManagement.bloc) {
     dependencies.add('  flutter_bloc: ^9.1.1');
-    dependencies.add('  equatable: ^2.0.7');
+    dependencies.add('  equatable: ^2.1.0');
   }
   if (context.config.stateManagement == StateManagement.provider) {
-    dependencies.add('  provider: ^6.1.5');
+    dependencies.add('  provider: ^6.1.5+1');
   }
-  if (context.config.dependencyInjection == DependencyInjection.injectable) {
-    dependencies.add('  get_it:');
-  }
-  if (context.config.useAssetGenerator) {
-    dependencies.add('  assets_generator_kit: ^0.1.0');
-  }
+  final devDependencies = <String>[
+    '  flutter_test:\n    sdk: flutter',
+    '  flutter_lints: ^6.0.0',
+    if (context.config.useAssetGenerator)
+      '  build_runner: $_buildRunnerVersion',
+    if (context.config.useAssetGenerator) '  assets_generator_kit: ^0.1.0',
+  ];
 
   return '''
 name: ${_packageName(context.paths.presentation)}
@@ -424,16 +473,14 @@ description: Flutter presentation layer generated by clean_architect.
 publish_to: none
 
 environment:
-  sdk: ^3.6.0
+  sdk: $_sdkConstraint
+  flutter: '$_flutterConstraint'
 
 dependencies:
 ${dependencies.join('\n')}
 
 dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^5.0.0
-  build_runner: ^2.15.1
+${devDependencies.join('\n')}
 flutter:
   uses-material-design: true
 ''';
@@ -441,7 +488,7 @@ flutter:
 
 String _assetGeneratorKit() {
   return '''
-assetgeneratorkit:
+assets_generator_kit:
   input:
     - assets/images
     - assets/icons
@@ -494,4 +541,10 @@ String _packageName(String libPath) {
   final libIndex = parts.indexOf('lib');
   if (libIndex > 0) return parts[libIndex - 1];
   return p.basename(libPath);
+}
+
+String _section(String name, Iterable<String> entries) {
+  final uniqueEntries = entries.toSet();
+  if (uniqueEntries.isEmpty) return '';
+  return '\n$name:\n${uniqueEntries.join('\n')}\n';
 }

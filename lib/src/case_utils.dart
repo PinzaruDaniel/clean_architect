@@ -34,3 +34,12 @@ String _capitalize(String word) {
   if (word.isEmpty) return word;
   return '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}';
 }
+
+int stableHiveTypeId(String input) {
+  var hash = 0x811c9dc5;
+  for (final codeUnit in input.codeUnits) {
+    hash ^= codeUnit;
+    hash = (hash * 0x01000193) & 0x7fffffff;
+  }
+  return hash % 65440;
+}
