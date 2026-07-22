@@ -5,8 +5,8 @@ import 'package:path/path.dart' as p;
 import 'case_utils.dart';
 import 'config.dart';
 import 'generated_file.dart';
+import 'operation_kind.dart';
 import 'path_resolver.dart';
-import 'templates/operation_templates.dart';
 
 class OperationPatcher {
   OperationPatcher({required this.config});

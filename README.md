@@ -855,6 +855,80 @@ Every scenario creates the architecture, auth, an `orders` feature, and remote,
 local, and cached operations, then requires `clean_architect doctor` to pass. GitHub Actions runs each scenario as a separate
 matrix job.
 
+## 0.9 Release Candidate Contract
+
+Version `0.9.0` freezes the interface planned for 1.0. Existing commands,
+options, configuration keys, generated package roots, and exported Dart APIs
+will not be removed or renamed before 1.0.
+
+### Frozen CLI surface
+
+| Command | Status |
+| --- | --- |
+| `init` | Supported |
+| `doctor` | Supported |
+| `create architecture` | Supported |
+| `create auth` | Supported |
+| `create feature <name>` | Supported |
+| `create usecase <name> --feature <feature>` | Supported |
+| `create repository <feature>` | Supported |
+| `create remote-function <name> --feature <feature>` | Supported |
+| `create local-function <name> --feature <feature>` | Supported |
+| `create cached-function <name> --feature <feature>` | Supported |
+
+`create base`, `remote-method`, `local-method`, `cached-method`, and `--di`
+remain supported compatibility aliases. Canonical names are used in new
+documentation and examples.
+
+### Frozen public Dart API
+
+Import supported APIs from:
+
+```dart
+import 'package:clean_architect/clean_architect.dart';
+```
+
+The 1.0 public surface includes the configuration enums and value objects,
+`CleanArchitectGenerator`, `GeneratedFile`, `OperationKind`, `PathResolver`,
+`FeaturePaths`, `ProjectDoctor`, its diagnostic/report types,
+`currentConfigVersion`, and `packageVersion`. Files below `lib/src` are
+implementation details and are not covered by compatibility guarantees.
+
+### Backward compatibility and upgrades
+
+- Patch releases fix defects without intentionally changing generated output.
+- Minor releases may add commands, options, configuration keys, templates, or
+  public APIs. Existing valid configuration remains valid.
+- A command, key, alias, or public API must be deprecated for at least one
+  minor release before removal.
+- Breaking changes are reserved for a new major version after 1.0.
+- Generated source is owned by the consuming project. Upgrading the CLI never
+  rewrites existing files unless the user explicitly passes `--force` or
+  `--overwrite`.
+- `config_version` controls schema migrations independently from the package
+  version. New optional keys retain defaults; incompatible schema changes
+  increment `config_version` and include migration instructions.
+- Golden snapshots protect representative generated output. Intentional
+  template changes must update the corresponding goldens and changelog.
+
+Before upgrading, commit the consuming project, update `clean_architect`, run
+`clean_architect doctor`, preview generation with `--dry-run`, and review any
+intentional snapshot-level output changes described in the changelog.
+
+## Runnable Example
+
+[`example/`](example/) is a checked-in generated project with `domain`, `data`,
+`di`, and a Flutter `presentation` package. It can be launched with:
+
+```sh
+cd example/presentation
+flutter pub get
+flutter run -d chrome
+```
+
+CI resolves and analyzes this example and builds its web target on every
+change.
+
 ## Publishing / Development Notes
 
 When working on this package locally:
@@ -863,6 +937,7 @@ When working on this package locally:
 dart format lib test bin
 dart analyze
 dart test
+UPDATE_GOLDENS=true dart test test/golden_generation_test.dart
 dart pub publish --dry-run
 ```
 

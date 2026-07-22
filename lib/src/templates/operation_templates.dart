@@ -4,6 +4,7 @@ import '../case_utils.dart';
 import '../config.dart';
 import '../generated_file.dart';
 import '../generator.dart';
+import '../operation_kind.dart';
 
 List<GeneratedFile> operationTemplates(
   TemplateContext context, {
@@ -55,15 +56,6 @@ List<GeneratedFile> operationTemplates(
   }
 
   return files;
-}
-
-enum OperationKind {
-  remote,
-  local,
-  cached;
-
-  bool get includesRemote => this == remote || this == cached;
-  bool get includesLocal => this == local || this == cached;
 }
 
 GeneratedFile _failure(TemplateContext context) {

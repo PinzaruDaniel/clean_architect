@@ -3,6 +3,7 @@ import 'package:path/path.dart' as p;
 import 'case_utils.dart';
 import 'config.dart';
 import 'generated_file.dart';
+import 'operation_kind.dart';
 import 'path_resolver.dart';
 import 'templates/auth_templates.dart';
 import 'templates/feature_templates.dart';

@@ -1,9 +1,7 @@
 import 'dart:io';
 
 import 'package:clean_architect/src/cli.dart';
-import 'package:clean_architect/src/config.dart';
-import 'package:clean_architect/src/generator.dart';
-import 'package:clean_architect/src/templates/operation_templates.dart';
+import 'package:clean_architect/clean_architect.dart';
 import 'package:test/test.dart';
 
 void main() {

@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: clean-architect-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Analyze, unit tests, and goldens
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: dart pub get
+      - run: dart format --output=none --set-exit-if-changed lib test bin
+      - run: dart analyze
+      - run: dart test
+
+  generated-projects:
+    name: Generated project (${{ matrix.scenario }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario:
+          - default_getx_manual_dio_secure
+          - bloc_injectable_hive_feature_first
+          - provider_injectable_objectbox
+          - none_abstract_plain_feature_first
+          - either_enabled
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: dart pub get
+      - run: dart test test/integration/generated_project_matrix_test.dart
+        env:
+          CLEAN_ARCHITECT_INTEGRATION: ${{ matrix.scenario }}
+
+  runnable-example:
+    name: Runnable generated example
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve Dart layer dependencies
+        run: |
+          for package in domain data di; do
+            (cd "example/$package" && dart pub get)
+          done
+      - run: flutter pub get
+        working-directory: example/presentation
+      - name: Analyze Dart layers
+        run: |
+          for package in domain data di; do
+            (cd "example/$package" && dart analyze)
+          done
+      - run: flutter analyze
+        working-directory: example/presentation
+      - run: flutter build web
+        working-directory: example/presentation
+      - run: dart run ../bin/clean_architect.dart doctor
+        working-directory: example
+
+  publish-dry-run:
+    name: Publish dry run
+    runs-on: ubuntu-latest
+    needs: [quality, generated-projects, runnable-example]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - run: dart pub get
+      - run: dart pub publish --dry-run

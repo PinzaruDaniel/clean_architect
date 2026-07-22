@@ -10,9 +10,9 @@ import 'file_writer.dart';
 import 'generator.dart';
 import 'generated_file.dart';
 import 'operation_patcher.dart';
+import 'operation_kind.dart';
 import 'path_resolver.dart';
 import 'project_doctor.dart';
-import 'templates/operation_templates.dart';
 import 'version.dart';
 
 class CleanArchitectCli {
@@ -513,6 +513,7 @@ class CleanArchitectCli {
     ];
 
     if (_flutterScaffoldExists(presentationRoot, platforms)) {
+      if (!dryRun) _removeFlutterTemplateTest(presentationRoot);
       _logger.info('skip flutter create; requested platforms already exist');
       return;
     }
@@ -529,6 +530,7 @@ class CleanArchitectCli {
         workingDirectory: presentationRoot,
       );
       if (result.exitCode == 0) {
+        _removeFlutterTemplateTest(presentationRoot);
         _logger.success('ran flutter ${args.join(' ')} in $presentationRoot');
         return;
       }
@@ -545,6 +547,17 @@ class CleanArchitectCli {
       _logger.info('cd $presentationRoot && flutter ${args.join(' ')}');
       _logger.detail(error.message);
     }
+  }
+
+  void _removeFlutterTemplateTest(String presentationRoot) {
+    final file = File(p.join(presentationRoot, "test", "widget_test.dart"));
+    if (!file.existsSync()) return;
+
+    final content = file.readAsStringSync();
+    final isStockFlutterTest =
+        content.contains("Counter increments smoke test") &&
+        content.contains("pumpWidget(const MyApp())");
+    if (isStockFlutterTest) file.deleteSync();
   }
 
   bool _flutterScaffoldExists(String root, List<String> platforms) {

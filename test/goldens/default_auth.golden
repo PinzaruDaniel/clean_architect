@@ -1,0 +1,613 @@
+===== data/lib/features/auth/local/auth_local_data_source.dart =====
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+import 'package:domain/features/auth/entities/auth_credentials_entity.dart';
+
+abstract class AuthLocalDataSource {
+  Future<void> saveCredentials(AuthCredentialsEntity credentials);
+
+  Future<AuthCredentialsEntity?> getCredentials();
+
+  Future<void> clearCredentials();
+}
+
+
+class AuthLocalDataSourceImpl implements AuthLocalDataSource {
+  AuthLocalDataSourceImpl(this._storage);
+
+  final FlutterSecureStorage _storage;
+
+  static Future<AuthLocalDataSource> init() async {
+    return AuthLocalDataSourceImpl(const FlutterSecureStorage());
+  }
+
+  static const _usernameKey = 'auth_username';
+  static const _passwordKey = 'auth_password';
+
+  @override
+  Future<void> saveCredentials(AuthCredentialsEntity credentials) async {
+    await _storage.write(key: _usernameKey, value: credentials.username);
+    await _storage.write(key: _passwordKey, value: credentials.password);
+  }
+
+  @override
+  Future<AuthCredentialsEntity?> getCredentials() async {
+    final username = await _storage.read(key: _usernameKey);
+    final password = await _storage.read(key: _passwordKey);
+    if (username == null || password == null) return null;
+
+    return AuthCredentialsEntity(
+      username: username,
+      password: password,
+    );
+  }
+
+  @override
+  Future<void> clearCredentials() async {
+    await _storage.delete(key: _usernameKey);
+    await _storage.delete(key: _passwordKey);
+  }
+}
+
+===== data/lib/features/auth/local/models/auth_box.dart =====
+class AuthBox {
+  const AuthBox({
+    this.id = 0,
+    required this.username,
+    required this.password,
+  });
+
+  final int id;
+  final String username;
+  final String password;
+}
+
+===== data/lib/features/auth/mappers/auth_token_mapper.dart =====
+import 'package:domain/features/auth/entities/auth_token_entity.dart';
+import '../remote/models/auth_token_dto.dart';
+
+extension AuthTokenDtoMapper on AuthTokenDto {
+  AuthTokenEntity toEntity() {
+    return AuthTokenEntity(
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      expiresAt: expiresAt,
+    );
+  }
+}
+
+===== data/lib/features/auth/remote/auth_remote_data_source.dart =====
+import 'package:dio/dio.dart';
+import 'package:retrofit/retrofit.dart';
+
+
+import 'models/auth_token_dto.dart';
+
+part 'auth_remote_data_source.g.dart';
+
+@RestApi(baseUrl: '')
+abstract class AuthRemoteDataSource {
+  factory AuthRemoteDataSource(Dio dio) = _AuthRemoteDataSource;
+
+  @POST('/authorization/token/')
+  Future<AuthTokenDto> login(@Body() Map<String, dynamic> body);
+}
+
+===== data/lib/features/auth/remote/models/auth_token_dto.dart =====
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'auth_token_dto.freezed.dart';
+part 'auth_token_dto.g.dart';
+
+@freezed
+abstract class AuthTokenDto with _$AuthTokenDto {
+  const factory AuthTokenDto({
+    @JsonKey(name: 'access_token') required String accessToken,
+    @JsonKey(name: 'refresh_token') String? refreshToken,
+    @JsonKey(name: 'expires_at') DateTime? expiresAt,
+  }) = _AuthTokenDto;
+
+  factory AuthTokenDto.fromJson(Map<String, dynamic> json) =>
+      _$AuthTokenDtoFromJson(json);
+}
+
+===== data/lib/features/auth/remote/models/login_request_dto.dart =====
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'login_request_dto.freezed.dart';
+part 'login_request_dto.g.dart';
+
+@freezed
+abstract class LoginRequestDto with _$LoginRequestDto {
+  const factory LoginRequestDto({
+    required String username,
+    required String password,
+  }) = _LoginRequestDto;
+
+  factory LoginRequestDto.fromJson(Map<String, dynamic> json) =>
+      _$LoginRequestDtoFromJson(json);
+}
+
+===== data/lib/features/auth/repositories/auth_repository_impl.dart =====
+import 'package:domain/features/auth/entities/auth_credentials_entity.dart';
+import 'package:domain/features/auth/entities/auth_token_entity.dart';
+import 'package:domain/features/auth/repositories/auth_repository.dart';
+import '../mappers/auth_token_mapper.dart';
+import '../remote/models/login_request_dto.dart';
+import '../local/auth_local_data_source.dart';
+import '../remote/auth_remote_data_source.dart';
+
+
+class AuthRepositoryImpl implements AuthRepository {
+  const AuthRepositoryImpl({
+    required AuthRemoteDataSource authRemoteDataSource,
+    required AuthLocalDataSource localDataSource,
+  })  : _authRemoteDataSource = authRemoteDataSource,
+        _localDataSource = localDataSource;
+
+  final AuthRemoteDataSource _authRemoteDataSource;
+  final AuthLocalDataSource _localDataSource;
+
+  @override
+  Future<AuthTokenEntity> login(AuthCredentialsEntity credentials) async {
+    final response = await _authRemoteDataSource.login(
+      LoginRequestDto(
+        username: credentials.username,
+        password: credentials.password,
+      ).toJson(),
+    );
+    return response.toEntity();
+  }
+
+  @override
+  Future<void> logout() {
+    // TODO: Call logout endpoint when your API supports it.
+    return Future<void>.value();
+  }
+
+  @override
+  Future<void> saveCredentials(AuthCredentialsEntity credentials) {
+    return _localDataSource.saveCredentials(credentials);
+  }
+
+  @override
+  Future<AuthCredentialsEntity?> getCredentials() {
+    return _localDataSource.getCredentials();
+  }
+
+  @override
+  Future<void> clearCredentials() {
+    return _localDataSource.clearCredentials();
+  }
+}
+
+===== data/pubspec.yaml =====
+name: data
+description: Data layer generated by clean_architect.
+publish_to: none
+
+environment:
+  sdk: ^3.11.0
+  flutter: '>=3.27.0'
+
+
+dependencies:
+  flutter:
+    sdk: flutter
+  domain:
+    path: ../domain
+  dio: ^5.10.0
+  retrofit: ^4.9.2
+  flutter_secure_storage: ^10.3.1
+  freezed_annotation: ^3.1.0
+  json_annotation: ^4.12.0
+
+
+dev_dependencies:
+  build_runner: ^2.15.1
+  retrofit_generator: ^10.2.8
+  freezed: ^3.2.5
+  json_serializable: ^6.14.0
+
+===== di/lib/auth_di.dart =====
+import 'package:data/features/auth/repositories/auth_repository_impl.dart';
+import 'package:data/features/auth/local/auth_local_data_source.dart';
+import 'package:data/features/auth/remote/auth_remote_data_source.dart';
+import 'package:domain/features/auth/repositories/auth_repository.dart';
+import 'package:domain/features/auth/usecases/clear_auth_credentials_use_case.dart';
+import 'package:domain/features/auth/usecases/get_auth_credentials_use_case.dart';
+import 'package:domain/features/auth/usecases/login_use_case.dart';
+import 'package:domain/features/auth/usecases/logout_use_case.dart';
+import 'package:domain/features/auth/usecases/save_auth_credentials_use_case.dart';
+
+class AuthDependencies {
+  const AuthDependencies({
+    required this.repository,
+    required this.loginUseCase,
+    required this.logoutUseCase,
+    required this.saveAuthCredentialsUseCase,
+    required this.getAuthCredentialsUseCase,
+    required this.clearAuthCredentialsUseCase,
+  });
+
+  final AuthRepository repository;
+  final LoginUseCase loginUseCase;
+  final LogoutUseCase logoutUseCase;
+  final SaveAuthCredentialsUseCase saveAuthCredentialsUseCase;
+  final GetAuthCredentialsUseCase getAuthCredentialsUseCase;
+  final ClearAuthCredentialsUseCase clearAuthCredentialsUseCase;
+}
+
+AuthDependencies buildAuthDependencies({
+  required AuthRemoteDataSource authRemoteDataSource,
+  required AuthLocalDataSource localDataSource,
+}) {
+  final repository = AuthRepositoryImpl(
+    authRemoteDataSource: authRemoteDataSource,
+    localDataSource: localDataSource,
+  );
+
+  return AuthDependencies(
+    repository: repository,
+    loginUseCase: LoginUseCase(repository),
+    logoutUseCase: LogoutUseCase(repository),
+    saveAuthCredentialsUseCase: SaveAuthCredentialsUseCase(repository),
+    getAuthCredentialsUseCase: GetAuthCredentialsUseCase(repository),
+    clearAuthCredentialsUseCase: ClearAuthCredentialsUseCase(repository),
+  );
+}
+
+===== di/pubspec.yaml =====
+name: di
+description: Dependency injection layer generated by clean_architect.
+publish_to: none
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  domain:
+    path: ../domain
+  data:
+    path: ../data
+  get_it: ^9.2.1
+
+===== domain/lib/features/auth/entities/auth_credentials_entity.dart =====
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'auth_credentials_entity.freezed.dart';
+
+@freezed
+abstract class AuthCredentialsEntity with _$AuthCredentialsEntity {
+  const factory AuthCredentialsEntity({
+    required String username,
+    required String password,
+  }) = _AuthCredentialsEntity;
+}
+
+===== domain/lib/features/auth/entities/auth_token_entity.dart =====
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'auth_token_entity.freezed.dart';
+
+@freezed
+abstract class AuthTokenEntity with _$AuthTokenEntity {
+  const factory AuthTokenEntity({
+    required String accessToken,
+    String? refreshToken,
+    DateTime? expiresAt,
+  }) = _AuthTokenEntity;
+}
+
+===== domain/lib/features/auth/repositories/auth_repository.dart =====
+import '../entities/auth_credentials_entity.dart';
+import '../entities/auth_token_entity.dart';
+
+abstract interface class AuthRepository {
+  Future<AuthTokenEntity> login(AuthCredentialsEntity credentials);
+
+  Future<void> logout();
+
+  Future<void> saveCredentials(AuthCredentialsEntity credentials);
+
+  Future<AuthCredentialsEntity?> getCredentials();
+
+  Future<void> clearCredentials();
+}
+
+===== domain/lib/features/auth/usecases/clear_auth_credentials_use_case.dart =====
+import '../repositories/auth_repository.dart';
+
+class ClearAuthCredentialsUseCase {
+  const ClearAuthCredentialsUseCase(this._repository);
+
+  final AuthRepository _repository;
+
+  Future<void> call() {
+    return _repository.clearCredentials();
+  }
+}
+
+===== domain/lib/features/auth/usecases/get_auth_credentials_use_case.dart =====
+import '../entities/auth_credentials_entity.dart';
+import '../repositories/auth_repository.dart';
+
+class GetAuthCredentialsUseCase {
+  const GetAuthCredentialsUseCase(this._repository);
+
+  final AuthRepository _repository;
+
+  Future<AuthCredentialsEntity?> call() {
+    return _repository.getCredentials();
+  }
+}
+
+===== domain/lib/features/auth/usecases/login_use_case.dart =====
+import '../entities/auth_credentials_entity.dart';
+import '../entities/auth_token_entity.dart';
+import '../repositories/auth_repository.dart';
+
+class LoginUseCase {
+  const LoginUseCase(this._repository);
+
+  final AuthRepository _repository;
+
+  Future<AuthTokenEntity> call(AuthCredentialsEntity credentials) {
+    return _repository.login(credentials);
+  }
+}
+
+===== domain/lib/features/auth/usecases/logout_use_case.dart =====
+import '../repositories/auth_repository.dart';
+
+class LogoutUseCase {
+  const LogoutUseCase(this._repository);
+
+  final AuthRepository _repository;
+
+  Future<void> call() {
+    return _repository.logout();
+  }
+}
+
+===== domain/lib/features/auth/usecases/save_auth_credentials_use_case.dart =====
+import '../entities/auth_credentials_entity.dart';
+import '../repositories/auth_repository.dart';
+
+class SaveAuthCredentialsUseCase {
+  const SaveAuthCredentialsUseCase(this._repository);
+
+  final AuthRepository _repository;
+
+  Future<void> call(AuthCredentialsEntity credentials) {
+    return _repository.saveCredentials(credentials);
+  }
+}
+
+===== domain/pubspec.yaml =====
+name: domain
+description: Domain layer generated by clean_architect.
+publish_to: none
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  freezed_annotation: ^3.1.0
+
+dev_dependencies:
+  build_runner: ^2.15.1
+  freezed: ^3.2.5
+
+===== presentation/analysis_options.yaml =====
+include: package:flutter_lints/flutter.yaml
+
+===== presentation/asset_generator_kit.yaml =====
+assets_generator_kit:
+  input:
+    - assets/images
+    - assets/icons
+
+  output: lib/generated/assets.dart
+
+  integrations:
+    svg: true
+    lottie: false
+
+===== presentation/assets/icons/.gitkeep =====
+
+
+===== presentation/assets/images/.gitkeep =====
+
+
+===== presentation/lib/constants/.gitkeep =====
+
+
+===== presentation/lib/controllers/.gitkeep =====
+
+
+===== presentation/lib/controllers/auth_controller.dart =====
+import 'package:get/get.dart';
+import 'package:domain/features/auth/entities/auth_credentials_entity.dart';
+import 'package:domain/features/auth/usecases/login_use_case.dart';
+import 'package:get_it/get_it.dart';
+class LoginState {
+  const LoginState({
+    this.username = '',
+    this.password = '',
+    this.isLoading = false,
+    this.errorMessage,
+  });
+
+  final String username;
+  final String password;
+  final bool isLoading;
+  final String? errorMessage;
+
+  LoginState copyWith({
+    String? username,
+    String? password,
+    bool? isLoading,
+    String? errorMessage,
+  }) {
+    return LoginState(
+      username: username ?? this.username,
+      password: password ?? this.password,
+      isLoading: isLoading ?? this.isLoading,
+      errorMessage: errorMessage,
+    );
+  }
+}
+
+
+class AuthController extends GetxController {
+  final _loginUseCase = GetIt.instance.get<LoginUseCase>();
+  final viewItem = const LoginState().obs;
+
+  Future<void> login() async {
+    viewItem.value = viewItem.value.copyWith(isLoading: true);
+    try {
+      await _loginUseCase(
+        AuthCredentialsEntity(
+          username: viewItem.value.username,
+          password: viewItem.value.password,
+        ),
+      );
+      viewItem.value = viewItem.value.copyWith(isLoading: false);
+    } catch (error) {
+      viewItem.value = viewItem.value.copyWith(
+        isLoading: false,
+        errorMessage: error.toString(),
+      );
+    }
+  }
+}
+
+===== presentation/lib/main.dart =====
+import 'package:flutter/material.dart';
+
+void main() {
+  runApp(const CleanArchitectApp());
+}
+
+class CleanArchitectApp extends StatelessWidget {
+  const CleanArchitectApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Clean Architect',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        useMaterial3: true,
+      ),
+      home: const Scaffold(
+        body: Center(child: Text('Clean Architect')),
+      ),
+    );
+  }
+}
+
+===== presentation/lib/pages/.gitkeep =====
+
+
+===== presentation/lib/pages/login_page.dart =====
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+
+import '../controllers/auth_controller.dart';
+
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
+
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  late final AuthController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    Get.put(AuthController());
+    controller = Get.find<AuthController>();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Login')),
+      body: Obx(() {
+        final viewItem = controller.viewItem.value;
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                decoration: const InputDecoration(labelText: 'Username'),
+                onChanged: (value) {
+                  controller.viewItem.value = viewItem.copyWith(username: value);
+                },
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'Password'),
+                onChanged: (value) {
+                  controller.viewItem.value = viewItem.copyWith(password: value);
+                },
+              ),
+              if (viewItem.errorMessage != null) ...[
+                const SizedBox(height: 12),
+                Text(viewItem.errorMessage!, style: const TextStyle(color: Colors.red)),
+              ],
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: viewItem.isLoading ? null : controller.login,
+                child: Text(viewItem.isLoading ? 'Signing in...' : 'Sign in'),
+              ),
+            ],
+          ),
+        );
+      }),
+    );
+  }
+}
+
+===== presentation/lib/utils/.gitkeep =====
+
+
+===== presentation/lib/widgets/.gitkeep =====
+
+
+===== presentation/pubspec.yaml =====
+name: presentation
+description: Flutter presentation layer generated by clean_architect.
+publish_to: none
+
+environment:
+  sdk: ^3.11.0
+  flutter: '>=3.27.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  domain:
+    path: ../domain
+  data:
+    path: ../data
+  di:
+    path: ../di
+  get_it: ^9.2.1
+  get: ^4.7.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: ^2.15.1
+  assets_generator_kit: ^0.1.0
+flutter:
+  uses-material-design: true

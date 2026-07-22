@@ -1,0 +1,194 @@
+######## remote ########
+===== data/lib/features/orders/mappers/load_details_mapper.dart =====
+import 'package:domain/features/orders/entities/load_details_entity.dart';
+import '../remote/models/load_details_dto.dart';
+
+extension LoadDetailsDtoMapper on LoadDetailsDto {
+  LoadDetailsEntity toEntity() {
+    return LoadDetailsEntity(remoteId: id);
+  }
+}
+
+===== data/lib/features/orders/remote/models/load_details_dto.dart =====
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'load_details_dto.freezed.dart';
+part 'load_details_dto.g.dart';
+
+@freezed
+abstract class LoadDetailsDto with _$LoadDetailsDto {
+  const factory LoadDetailsDto({
+    required String id,
+  }) = _LoadDetailsDto;
+
+  factory LoadDetailsDto.fromJson(Map<String, dynamic> json) =>
+      _$LoadDetailsDtoFromJson(json);
+}
+
+===== domain/lib/features/orders/entities/load_details_entity.dart =====
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'load_details_entity.freezed.dart';
+
+@freezed
+abstract class LoadDetailsEntity with _$LoadDetailsEntity {
+  const factory LoadDetailsEntity({
+    required String remoteId,
+  }) = _LoadDetailsEntity;
+}
+
+===== domain/lib/features/orders/usecases/load_details_use_case.dart =====
+import '../entities/load_details_entity.dart';
+import '../repositories/orders_repository.dart';
+
+class LoadDetailsUseCase {
+  const LoadDetailsUseCase(this._repository);
+
+  final OrdersRepository _repository;
+
+  Future<LoadDetailsEntity> call() {
+    return _repository.loadDetails();
+  }
+}
+
+######## local ########
+===== data/lib/features/orders/local/models/load_details_box.dart =====
+class LoadDetailsBox {
+  const LoadDetailsBox({
+    this.id = 0,
+    this.remoteId = '',
+  });
+
+  final int id;
+  final String remoteId;
+}
+
+===== data/lib/features/orders/mappers/load_details_mapper.dart =====
+import 'package:domain/features/orders/entities/load_details_entity.dart';
+import '../local/models/load_details_box.dart';
+
+extension LoadDetailsBoxMapper on LoadDetailsBox {
+  LoadDetailsEntity toEntity() {
+    return LoadDetailsEntity(remoteId: remoteId);
+  }
+}
+
+===== domain/lib/features/orders/entities/load_details_entity.dart =====
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'load_details_entity.freezed.dart';
+
+@freezed
+abstract class LoadDetailsEntity with _$LoadDetailsEntity {
+  const factory LoadDetailsEntity({
+    required String remoteId,
+  }) = _LoadDetailsEntity;
+}
+
+===== domain/lib/features/orders/usecases/load_details_use_case.dart =====
+import '../entities/load_details_entity.dart';
+import '../repositories/orders_repository.dart';
+
+class LoadDetailsUseCase {
+  const LoadDetailsUseCase(this._repository);
+
+  final OrdersRepository _repository;
+
+  Future<LoadDetailsEntity> call() {
+    return _repository.loadDetails();
+  }
+}
+
+######## cached ########
+===== data/lib/features/orders/local/models/load_details_box.dart =====
+class LoadDetailsBox {
+  const LoadDetailsBox({
+    this.id = 0,
+    this.remoteId = '',
+  });
+
+  final int id;
+  final String remoteId;
+}
+
+===== data/lib/features/orders/mappers/load_details_box_mapper.dart =====
+import 'package:domain/features/orders/entities/load_details_entity.dart';
+import '../local/models/load_details_box.dart';
+
+extension LoadDetailsBoxMapper on LoadDetailsBox {
+  LoadDetailsEntity toEntity() {
+    return LoadDetailsEntity(remoteId: remoteId);
+  }
+}
+
+===== data/lib/features/orders/mappers/load_details_mapper.dart =====
+import 'package:domain/features/orders/entities/load_details_entity.dart';
+import '../local/models/load_details_box.dart';
+import '../remote/models/load_details_dto.dart';
+
+extension LoadDetailsDtoMapper on LoadDetailsDto {
+  LoadDetailsEntity toEntity() {
+    return LoadDetailsEntity(remoteId: id);
+  }
+  LoadDetailsBox toBox() {
+    return LoadDetailsBox(remoteId: id);
+  }
+
+}
+
+===== data/lib/features/orders/remote/models/load_details_dto.dart =====
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'load_details_dto.freezed.dart';
+part 'load_details_dto.g.dart';
+
+@freezed
+abstract class LoadDetailsDto with _$LoadDetailsDto {
+  const factory LoadDetailsDto({
+    required String id,
+  }) = _LoadDetailsDto;
+
+  factory LoadDetailsDto.fromJson(Map<String, dynamic> json) =>
+      _$LoadDetailsDtoFromJson(json);
+}
+
+===== domain/lib/features/orders/entities/load_details_entity.dart =====
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'load_details_entity.freezed.dart';
+
+@freezed
+abstract class LoadDetailsEntity with _$LoadDetailsEntity {
+  const factory LoadDetailsEntity({
+    required String remoteId,
+  }) = _LoadDetailsEntity;
+}
+
+===== domain/lib/features/orders/usecases/stream_load_details_use_case.dart =====
+import '../entities/load_details_entity.dart';
+import '../repositories/orders_repository.dart';
+
+class StreamLoadDetailsUseCase {
+  const StreamLoadDetailsUseCase(this._repository);
+
+  final OrdersRepository _repository;
+
+  Future<LoadDetailsEntity> call() {
+    return _repository.streamLoadDetails();
+  }
+}
+
+===== domain/lib/features/orders/usecases/sync_load_details_use_case.dart =====
+import '../entities/load_details_entity.dart';
+import '../repositories/orders_repository.dart';
+
+class SyncLoadDetailsUseCase {
+  const SyncLoadDetailsUseCase(this._repository);
+
+  final OrdersRepository _repository;
+
+  Future<LoadDetailsEntity> call() {
+    return _repository.syncLoadDetails();
+  }
+}
+

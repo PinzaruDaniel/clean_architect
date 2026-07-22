@@ -37,7 +37,7 @@ void main() {
     ], directory.path);
 
     expect(version.exitCode, 0);
-    expect(version.stdout, contains('clean_architect 0.6.0'));
+    expect(version.stdout, contains('clean_architect 0.9.0'));
     expect(help.exitCode, 0);
     expect(
       help.stdout,

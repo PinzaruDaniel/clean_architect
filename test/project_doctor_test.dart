@@ -100,7 +100,7 @@ void main() {
   test('doctor CLI returns a nonzero exit code when validation fails', () {
     final repositoryRoot = Directory.current.path;
     File(
-      CleanArchitectConfig.fileName,
+      p.join(directory.path, CleanArchitectConfig.fileName),
     ).writeAsStringSync(CleanArchitectConfig.defaultYaml());
     Directory(
       p.join(directory.path, 'data', '.dart_tool'),

@@ -1,3 +1,13 @@
+## 0.9.0
+
+- Froze the supported CLI commands, compatibility aliases, configuration keys, default paths, and public Dart API for the 1.0 release line.
+- Exported `GeneratedFile` and `OperationKind` so every type used by the public generator API is directly importable.
+- Added golden snapshots for default auth, generic feature, and remote, local, and cached operation output.
+- Added a runnable generated Flutter web example with all four architecture packages.
+- Removed the incompatible stock `MyApp` widget test after `flutter create` scaffolding.
+- Added CI jobs for formatting, analysis, unit and golden tests, the generated-project matrix, runnable-example builds, and pub.dev validation.
+- Documented backward compatibility guarantees, deprecation rules, configuration migrations, and the upgrade policy.
+
 ## 0.6.0
 
 - Replaced doctor reminders with real validation of all configured layer pubspecs and package roots.
