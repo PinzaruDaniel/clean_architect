@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:meta/meta.dart';
+import 'package:path/path.dart' as p;
 import 'package:yaml/yaml.dart';
 
 enum ProjectStructure { featureFirst, layeredPackages }
@@ -19,6 +20,8 @@ enum LocalStorage {
 
 enum DependencyInjection { manual, injectable }
 
+const currentConfigVersion = 1;
+
 class CleanArchitectConfig {
   const CleanArchitectConfig({
     required this.structure,
@@ -31,6 +34,7 @@ class CleanArchitectConfig {
     required this.useAssetGenerator,
     required this.useEitherFailure,
     required this.flutter,
+    this.configVersion = currentConfigVersion,
   });
 
   factory CleanArchitectConfig.defaults() {
@@ -61,7 +65,12 @@ class CleanArchitectConfig {
       return CleanArchitectConfig.defaults();
     }
 
-    final document = loadYaml(file.readAsStringSync());
+    late final Object? document;
+    try {
+      document = loadYaml(file.readAsStringSync());
+    } on FormatException catch (error) {
+      throw FormatException('Invalid ${file.path}: ${error.message}');
+    }
     if (document is! YamlMap) {
       throw const FormatException('clean_architect.yaml must contain a map.');
     }
@@ -74,11 +83,13 @@ class CleanArchitectConfig {
     }
 
     final defaults = CleanArchitectConfig.defaults();
-    final models = root['models'];
-    final paths = root['paths'];
-    final flutter = root['flutter'];
+    final configVersion = _configVersion(root['config_version']);
+    final models = _mapSection(root, 'models');
+    final paths = _mapSection(root, 'paths');
+    final flutter = _mapSection(root, 'flutter');
 
-    return CleanArchitectConfig(
+    final config = CleanArchitectConfig(
+      configVersion: configVersion,
       structure: _enumValue(
         root['structure'],
         ProjectStructure.values,
@@ -154,8 +165,11 @@ class CleanArchitectConfig {
         di: _stringValue(paths, 'di', defaults.paths.di),
       ),
     );
+    config.validate();
+    return config;
   }
 
+  final int configVersion;
   final ProjectStructure structure;
   final StateManagement stateManagement;
   final NetworkClient network;
@@ -172,6 +186,7 @@ class CleanArchitectConfig {
   static String defaultYaml() {
     return '''
 clean_architect:
+  config_version: $currentConfigVersion
   structure: layered_packages # layered_packages or feature_first
   state_management: getx # getx, bloc, provider, or none
   network: dio # dio or abstract
@@ -200,6 +215,62 @@ clean_architect:
   String get networkName => _networkName(network);
   String get localStorageName => _storageName(localStorage);
   String get dependencyInjectionName => _diName(dependencyInjection);
+
+  void validate() {
+    if (configVersion < 1 || configVersion > currentConfigVersion) {
+      throw FormatException(
+        'Unsupported config_version $configVersion. '
+        'This CLI supports config_version $currentConfigVersion.',
+      );
+    }
+
+    const supportedPlatforms = {
+      'android',
+      'ios',
+      'web',
+      'windows',
+      'macos',
+      'linux',
+    };
+    final invalidPlatforms = flutter.platforms
+        .where((platform) => !supportedPlatforms.contains(platform))
+        .toSet();
+    if (invalidPlatforms.isNotEmpty) {
+      throw FormatException(
+        'Unsupported Flutter platform(s): ${invalidPlatforms.join(', ')}. '
+        'Allowed values: ${supportedPlatforms.join(', ')}.',
+      );
+    }
+    if (flutter.platforms.toSet().length != flutter.platforms.length) {
+      throw const FormatException(
+        'Flutter platforms must not contain duplicates.',
+      );
+    }
+
+    final configuredPaths = {
+      'domain': paths.domain,
+      'data': paths.data,
+      'presentation': paths.presentation,
+      'di': paths.di,
+    };
+    for (final entry in configuredPaths.entries) {
+      _validateLayerPath(entry.key, entry.value);
+    }
+
+    final packageRoots = configuredPaths.map(
+      (name, path) => MapEntry(name, _packageRoot(path)),
+    );
+    final roots = <String, String>{};
+    for (final entry in packageRoots.entries) {
+      final previous = roots[entry.value];
+      if (previous != null) {
+        throw FormatException(
+          'Paths "$previous" and "${entry.key}" resolve to the same package.',
+        );
+      }
+      roots[entry.value] = entry.key;
+    }
+  }
 }
 
 class FlutterConfig {
@@ -236,6 +307,45 @@ class PathConfig {
   final String di;
 }
 
+YamlMap? _mapSection(YamlMap root, String key) {
+  final value = root[key];
+  if (value == null) return null;
+  if (value is YamlMap) return value;
+  throw FormatException('$key must contain a map.');
+}
+
+int _configVersion(Object? value) {
+  if (value == null) return 1;
+  if (value is int) return value;
+  throw const FormatException('config_version must be an integer.');
+}
+
+void _validateLayerPath(String label, String value) {
+  if (value.trim().isEmpty) {
+    throw FormatException('$label path must not be empty.');
+  }
+  if (p.isAbsolute(value) || p.windows.isAbsolute(value)) {
+    throw FormatException('$label path must be relative: "$value".');
+  }
+
+  final parts = p.split(value);
+  if (parts.contains('..')) {
+    throw FormatException('$label path must not contain "..": "$value".');
+  }
+  final libIndex = parts.indexOf('lib');
+  if (libIndex <= 0) {
+    throw FormatException(
+      '$label path must point inside a package lib directory: "$value".',
+    );
+  }
+}
+
+String _packageRoot(String path) {
+  final parts = p.split(p.normalize(path));
+  final libIndex = parts.indexOf('lib');
+  return p.joinAll(parts.take(libIndex));
+}
+
 T _enumValue<T>(
   Object? value,
   List<T> values,
@@ -243,7 +353,10 @@ T _enumValue<T>(
   T fallback,
 ) {
   if (value == null) return fallback;
-  final text = value.toString();
+  if (value is! String) {
+    throw const FormatException('Configuration option values must be strings.');
+  }
+  final text = value;
   for (final item in values) {
     if (nameOf(item) == text) return item;
   }
@@ -254,21 +367,31 @@ T _enumValue<T>(
 
 bool _boolValue(Object? map, String key, bool fallback) {
   if (map is! YamlMap || map[key] == null) return fallback;
-  return map[key] == true;
+  final value = map[key];
+  if (value is bool) return value;
+  throw FormatException('$key must be true or false.');
 }
 
 String _stringValue(Object? map, String key, String fallback) {
   if (map is! YamlMap || map[key] == null) return fallback;
-  return map[key].toString();
+  final value = map[key];
+  if (value is String) return value;
+  throw FormatException('$key must be a string.');
 }
 
 List<String> _stringListValue(Object? map, String key, List<String> fallback) {
   if (map is! YamlMap || map[key] == null) return fallback;
   final value = map[key];
   if (value is YamlList) {
-    return value.map((item) => item.toString()).toList(growable: false);
+    if (value.any((item) => item is! String)) {
+      throw FormatException('$key must contain only strings.');
+    }
+    return value.cast<String>().toList(growable: false);
   }
-  final text = value.toString();
+  if (value is! String) {
+    throw FormatException('$key must be a list or comma-separated string.');
+  }
+  final text = value;
   if (text.trim().isEmpty) return const [];
   return text
       .split(',')

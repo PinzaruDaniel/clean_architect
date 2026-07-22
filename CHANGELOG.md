@@ -1,3 +1,13 @@
+## 0.5.0
+
+- Added `clean_architect --version` and command-specific help.
+- Added strict validation for names, Flutter platforms, layer paths, YAML value types, and incompatible CLI settings.
+- Added concise malformed YAML errors without stack traces.
+- Added plan-first transactional generation with complete conflict preflight.
+- Required existing features before remote, local, or cached operation commands can patch them.
+- Made repeated feature, operation, architecture, and scaffolding commands idempotent.
+- Added `config_version: 1` for future configuration migrations.
+
 ## 0.4.0
 
 - Added a generated-project integration matrix covering five representative configurations, both structure modes, auth, generic features, and all operation commands.

@@ -1,4 +1,5 @@
 clean_architect:
+  config_version: 1
   structure: layered_packages # layered_packages or feature_first
   state_management: getx # getx, bloc, provider, or none
   network: dio # dio or abstract

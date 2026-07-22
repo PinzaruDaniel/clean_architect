@@ -1,29 +1,25 @@
 import 'dart:io';
 
-import 'package:mason_logger/mason_logger.dart';
 import 'package:path/path.dart' as p;
 
 import 'case_utils.dart';
 import 'config.dart';
+import 'generated_file.dart';
 import 'path_resolver.dart';
 import 'templates/operation_templates.dart';
 
 class OperationPatcher {
-  const OperationPatcher({
-    required this.config,
-    required this.logger,
-    required this.dryRun,
-  });
+  OperationPatcher({required this.config});
 
   final CleanArchitectConfig config;
-  final Logger logger;
-  final bool dryRun;
+  final List<GeneratedFile> _files = [];
 
-  void apply({
+  List<GeneratedFile> plan({
     required OperationKind kind,
     required String featureName,
     required String operationName,
   }) {
+    _files.clear();
     final feature = NameCases(featureName);
     final operation = NameCases(operationName);
     final paths = PathResolver(config).resolve(feature.snake);
@@ -45,6 +41,7 @@ class OperationPatcher {
       operation,
       kind,
     );
+    return List<GeneratedFile>.unmodifiable(_files);
   }
 
   void _patchRemoteSource(
@@ -167,7 +164,6 @@ ${implementationAnnotation}class ${feature.pascal}LocalDataSourceImpl implements
 
     var content = file.readAsStringSync();
     if (content.contains('Future<${operation.pascal}Box> $methodName()')) {
-      logger.warn('skip $path already contains $methodName');
       return;
     }
 
@@ -222,7 +218,6 @@ ${implementationAnnotation}class ${feature.pascal}LocalDataSourceImpl implements
 
     var content = file.readAsStringSync();
     if (content.contains(' $methodName(')) {
-      logger.warn('skip $path already contains $methodName');
       return;
     }
 
@@ -563,7 +558,6 @@ ${_wrapReturn('final box = await _localDataSource.$sourceMethod();', 'box.toEnti
 
     var content = file.readAsStringSync();
     if (content.contains(duplicateNeedle)) {
-      logger.warn('skip $path already contains $duplicateNeedle');
       return;
     }
 
@@ -622,14 +616,19 @@ ${_wrapReturn('final box = await _localDataSource.$sourceMethod();', 'box.toEnti
   }
 
   void _write(String path, String content) {
-    if (dryRun) {
-      logger.info('${File(path).existsSync() ? 'update' : 'create'} $path');
-      return;
+    final index = _files.indexWhere(
+      (file) => p.normalize(file.path) == p.normalize(path),
+    );
+    final generated = GeneratedFile(
+      path: path,
+      content: content,
+      allowUpdate: File(path).existsSync(),
+    );
+    if (index == -1) {
+      _files.add(generated);
+    } else {
+      _files[index] = generated;
     }
-    final file = File(path);
-    file.parent.createSync(recursive: true);
-    file.writeAsStringSync(content.endsWith('\n') ? content : '$content\n');
-    logger.success('updated $path');
   }
 }
 

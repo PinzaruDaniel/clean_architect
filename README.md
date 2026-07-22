@@ -34,6 +34,9 @@ Do not use `dart run clean_architect ...` in an empty folder. `dart run` needs a
 ## Commands
 
 ```sh
+clean_architect --version
+clean_architect <command> --help
+clean_architect create feature --help
 clean_architect init
 clean_architect doctor
 clean_architect create architecture
@@ -93,7 +96,7 @@ clean_architect create architecture --flutter-create --platforms android,ios
 clean_architect create auth --flutter-create --platforms android,ios,web
 ```
 
-`--overwrite` and `--force` are required before existing generated files are replaced.
+`--overwrite` and `--force` are required before conflicting generated files are replaced. Complete features and identical generated files are treated as idempotent no-ops.
 
 ## Configuration File
 
@@ -107,6 +110,7 @@ This creates `clean_architect.yaml`:
 
 ```yaml
 clean_architect:
+  config_version: 1
   structure: layered_packages # layered_packages or feature_first
   state_management: getx # getx, bloc, provider, or none
   network: dio # dio or abstract
@@ -133,6 +137,7 @@ clean_architect:
 
 | Key | Values | Default | What it controls |
 | --- | --- | --- | --- |
+| `config_version` | positive integer | `1` | Configuration schema version used for future migrations. |
 | `structure` | `layered_packages`, `feature_first` | `layered_packages` | How feature paths are resolved from the configured layer paths. |
 | `state_management` | `getx`, `bloc`, `provider`, `none` | `getx` | Presentation controller/page style. |
 | `network` | `dio`, `abstract` | `dio` | Remote data source style and generated data dependencies. |
@@ -276,6 +281,7 @@ This only runs for commands that generate presentation structure: `create archit
 
 ```yaml
 clean_architect:
+  config_version: 1
   structure: layered_packages
   paths:
     domain: domain/lib
@@ -300,6 +306,7 @@ You can point the layers to existing packages or app folders:
 
 ```yaml
 clean_architect:
+  config_version: 1
   structure: layered_packages
   paths:
     domain: packages/domain/lib/modules
@@ -316,6 +323,7 @@ Then `clean_architect create feature profile` creates feature files under those 
 
 ```yaml
 clean_architect:
+  config_version: 1
   structure: feature_first
   paths:
     domain: domain/lib
@@ -759,7 +767,21 @@ and adds `assetgeneratorkit` to `presentation/pubspec.yaml`.
 
 ## Safety
 
-By default, existing files are not overwritten.
+Every generation command builds a complete in-memory plan first. Names,
+configuration, required features, duplicate outputs, and filesystem conflicts
+are validated before the first file is written. If any conflict is found, the
+command aborts without partially generating the remaining files.
+
+Identical files are left untouched, and rerunning a completed feature or
+operation is an idempotent no-op. Operation commands require the feature to
+already exist:
+
+```sh
+clean_architect create feature orders
+clean_architect create cached-function syncCatalog --feature orders
+```
+
+By default, conflicting existing files are not overwritten.
 
 Preview generated files:
 

@@ -74,6 +74,7 @@ GeneratedFile _failure(TemplateContext context) {
       'failures',
       'failure.dart',
     ),
+    skipIfExists: true,
     content: '''
 class Failure {
   const Failure(this.message);

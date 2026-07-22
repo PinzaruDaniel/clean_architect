@@ -138,7 +138,15 @@ include: package:flutter_lints/flutter.yaml
     }
   }
 
-  return files;
+  return files
+      .map(
+        (file) => GeneratedFile(
+          path: file.path,
+          content: file.content,
+          skipIfExists: true,
+        ),
+      )
+      .toList(growable: false);
 }
 
 List<GeneratedFile> _dataModuleFiles(TemplateContext context) {

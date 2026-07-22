@@ -10,7 +10,9 @@ import 'file_writer.dart';
 import 'generator.dart';
 import 'generated_file.dart';
 import 'operation_patcher.dart';
+import 'path_resolver.dart';
 import 'templates/operation_templates.dart';
+import 'version.dart';
 
 class CleanArchitectCli {
   CleanArchitectCli({Logger? logger}) : _logger = logger ?? Logger();
@@ -24,45 +26,67 @@ class CleanArchitectCli {
     try {
       results = parser.parse(arguments);
     } on FormatException catch (error) {
-      _logger.err(error.message);
-      _logger.info(parser.usage);
-      exitCode = 64;
+      _usageError(error.message, parser.usage);
       return;
     }
 
+    if (results['version'] == true) {
+      _logger.info('clean_architect $packageVersion');
+      return;
+    }
     if (results['help'] == true || results.command == null) {
-      _logger.info(parser.usage);
+      _logger.info(_rootHelp(parser));
       return;
     }
 
-    switch (results.command!.name) {
-      case 'init':
-        _init(results.command!);
-      case 'create':
-        _create(results.command!);
-      case 'doctor':
-        _doctor();
-      default:
-        _logger.err('Unknown command: ${results.command!.name}');
-        exitCode = 64;
+    final command = results.command!;
+    if (command['help'] == true) {
+      _logger.info(_commandHelp(command.name ?? '', command.rest));
+      return;
+    }
+
+    try {
+      switch (command.name) {
+        case 'init':
+          _init(command);
+        case 'create':
+          _create(command);
+        case 'doctor':
+          _doctor();
+        default:
+          _usageError('Unknown command: ${command.name}', parser.usage);
+      }
+    } on FormatException catch (error) {
+      _logger.err(error.message);
+      exitCode = 64;
+    } on FileSystemException catch (error) {
+      _logger.err(error.message);
+      exitCode = 74;
     }
   }
 
   ArgParser _buildParser() {
-    final parser = ArgParser()..addFlag('help', abbr: 'h', negatable: false);
+    final parser = ArgParser()
+      ..addFlag('help', abbr: 'h', negatable: false)
+      ..addFlag('version', negatable: false);
 
     parser.addCommand(
       'init',
       ArgParser()
+        ..addFlag('help', abbr: 'h', negatable: false)
         ..addFlag('force', abbr: 'f', negatable: false)
         ..addFlag('dry-run', negatable: false),
     );
 
-    parser.addCommand('doctor');
+    parser.addCommand(
+      'doctor',
+      ArgParser()..addFlag('help', abbr: 'h', negatable: false),
+    );
 
     parser.addCommand(
       'create',
       ArgParser()
+        ..addFlag('help', abbr: 'h', negatable: false)
         ..addFlag('dry-run', negatable: false)
         ..addFlag('overwrite', negatable: false)
         ..addFlag('force', abbr: 'f', negatable: false)
@@ -116,42 +140,83 @@ class CleanArchitectCli {
   void _create(ArgResults results) {
     final args = results.rest;
     if (args.isEmpty) {
-      _logger.err('Usage: clean_architect create architecture');
-      _logger.err('Usage: clean_architect create auth');
-      _logger.err('Usage: clean_architect create feature <name>');
-      exitCode = 64;
+      _usageError(
+        'A create target is required.',
+        _commandHelp('create', const []),
+      );
       return;
     }
 
     final config = _configWithOverrides(results);
-    final generator = CleanArchitectGenerator(config);
     final skipPresentation = results['skip-presentation'] == true;
+    _validateCreateSettings(results, config, skipPresentation);
+
+    final overwrite = results['overwrite'] == true || results['force'] == true;
+    final requestedFeature = switch (args.first) {
+      'auth' => 'auth',
+      'feature' when args.length == 2 => args[1],
+      _ => null,
+    };
+    if (requestedFeature != null) {
+      _validateName('Feature', requestedFeature);
+    }
+    if (!overwrite &&
+        requestedFeature != null &&
+        _featureGenerationComplete(
+          config,
+          requestedFeature,
+          skipPresentation: skipPresentation,
+          isAuth: args.first == 'auth',
+        )) {
+      _logger.info(
+        'skip feature ${NameCases(requestedFeature).snake}; already exists',
+      );
+      return;
+    }
+
+    final generator = CleanArchitectGenerator(config);
     final operationKind = _operationKind(args);
     final featureOption = results['feature'] as String?;
-    final files = _filesForCreate(
+    if (operationKind != null && featureOption != null) {
+      _validateName('Feature', featureOption);
+      _requireExistingFeature(config, featureOption);
+    }
+
+    final generated = _filesForCreate(
       args,
       generator,
       skipPresentation,
       featureOption,
       operationKind,
     );
-    if (files == null) {
+    if (generated == null) {
       exitCode = 64;
       return;
+    }
+
+    final files = <GeneratedFile>[...generated];
+    final modulePatch = _planFeatureDataModulePatch(args, config);
+    if (modulePatch != null) files.add(modulePatch);
+
+    if (operationKind != null) {
+      files.addAll(
+        OperationPatcher(config: config).plan(
+          kind: operationKind,
+          featureName: featureOption!,
+          operationName: args[1],
+        ),
+      );
     }
 
     final writer = FileWriter(
       logger: _logger,
       dryRun: results['dry-run'] == true,
-      overwrite: results['overwrite'] == true || results['force'] == true,
+      overwrite: overwrite,
     );
-    writer.writeAll(files);
-
-    _patchFeatureDataModuleIfNeeded(
-      args,
-      config,
-      dryRun: results['dry-run'] == true,
-    );
+    if (!writer.writeAll(files)) {
+      exitCode = 73;
+      return;
+    }
 
     if (_shouldRunFlutterCreate(
       args,
@@ -160,18 +225,6 @@ class CleanArchitectCli {
       operationKind: operationKind,
     )) {
       _runFlutterCreate(config, dryRun: results['dry-run'] == true);
-    }
-
-    if (operationKind != null) {
-      OperationPatcher(
-        config: config,
-        logger: _logger,
-        dryRun: results['dry-run'] == true,
-      ).apply(
-        kind: operationKind,
-        featureName: featureOption!,
-        operationName: args[1],
-      );
     }
   }
 
@@ -185,23 +238,39 @@ class CleanArchitectCli {
     switch (args.first) {
       case 'architecture':
       case 'base':
-        return generator.architecture(skipPresentation: skipPresentation);
-      case 'auth':
-        return generator.auth(skipPresentation: skipPresentation);
-      case 'feature':
-        if (args.length < 2) {
-          _logger.err('Usage: clean_architect create feature <name>');
+        if (!_hasArgumentCount(
+          args,
+          1,
+          'clean_architect create ${args.first}',
+        )) {
           return null;
         }
+        return generator.architecture(skipPresentation: skipPresentation);
+      case 'auth':
+        if (!_hasArgumentCount(args, 1, 'clean_architect create auth')) {
+          return null;
+        }
+        return generator.auth(skipPresentation: skipPresentation);
+      case 'feature':
+        if (!_hasArgumentCount(
+          args,
+          2,
+          'clean_architect create feature <name>',
+        )) {
+          return null;
+        }
+        _validateName('Feature', args[1]);
         return generator.feature(args[1], skipPresentation: skipPresentation);
       case 'usecase':
         final feature = featureOption;
-        if (args.length < 2 || feature == null || feature.isEmpty) {
+        if (args.length != 2 || feature == null || feature.isEmpty) {
           _logger.err(
             'Usage: clean_architect create usecase <name> --feature <feature>',
           );
           return null;
         }
+        _validateName('Use case', args[1]);
+        _validateName('Feature', feature);
         return generator.useCase(args[1], feature: feature);
       case 'remote-function':
       case 'remote-method':
@@ -210,22 +279,28 @@ class CleanArchitectCli {
       case 'cached-function':
       case 'cached-method':
         final feature = featureOption;
-        if (args.length < 2 || feature == null || feature.isEmpty) {
+        if (args.length != 2 || feature == null || feature.isEmpty) {
           _logger.err(
             'Usage: clean_architect create ${args.first} <name> --feature <feature>',
           );
           return null;
         }
+        _validateName('Operation', args[1]);
+        _validateName('Feature', feature);
         return generator.operation(
           args[1],
           feature: feature,
           kind: operationKind!,
         );
       case 'repository':
-        if (args.length < 2) {
-          _logger.err('Usage: clean_architect create repository <feature>');
+        if (!_hasArgumentCount(
+          args,
+          2,
+          'clean_architect create repository <feature>',
+        )) {
           return null;
         }
+        _validateName('Feature', args[1]);
         return generator.repository(args[1]);
       default:
         _logger.err('Unknown create target: ${args.first}');
@@ -248,7 +323,8 @@ class CleanArchitectCli {
       File(CleanArchitectConfig.fileName),
     );
 
-    return CleanArchitectConfig(
+    final overridden = CleanArchitectConfig(
+      configVersion: config.configVersion,
       structure: config.structure,
       stateManagement:
           _stateOverride(results['state'] as String?) ?? config.stateManagement,
@@ -278,6 +354,8 @@ class CleanArchitectCli {
       models: config.models,
       paths: config.paths,
     );
+    overridden.validate();
+    return overridden;
   }
 
   List<String>? _platformsOverride(String? value) {
@@ -303,16 +381,17 @@ class CleanArchitectCli {
     };
   }
 
-  void _patchFeatureDataModuleIfNeeded(
+  GeneratedFile? _planFeatureDataModulePatch(
     List<String> args,
-    CleanArchitectConfig config, {
-    required bool dryRun,
-  }) {
-    if (args.isEmpty) return;
-    if (config.dependencyInjection != DependencyInjection.injectable) return;
+    CleanArchitectConfig config,
+  ) {
+    if (args.isEmpty) return null;
+    if (config.dependencyInjection != DependencyInjection.injectable) {
+      return null;
+    }
     if (config.localStorage != LocalStorage.hive &&
         config.localStorage != LocalStorage.objectbox) {
-      return;
+      return null;
     }
 
     final featureName = switch (args.first) {
@@ -321,19 +400,19 @@ class CleanArchitectCli {
       'architecture' || 'base' => 'base_feature',
       _ => null,
     };
-    if (featureName == null || featureName.isEmpty) return;
+    if (featureName == null || featureName.isEmpty) return null;
 
     final feature = NameCases(featureName);
     final dataRoot = _packageRoot(config.paths.data);
     final dataLib = p.join(dataRoot, 'lib');
     final modulePath = p.join(dataLib, 'data_module.dart');
     final moduleFile = File(modulePath);
-    if (!moduleFile.existsSync()) return;
+    if (!moduleFile.existsSync()) return null;
 
     final boxClass = '${feature.pascal}Box';
     final methodName = '${feature.camel}Box';
     var content = moduleFile.readAsStringSync();
-    if (content.contains(' $methodName(')) return;
+    if (content.contains(' $methodName(')) return null;
 
     final featureDataPath = p.join(config.paths.data, feature.snake);
     final boxPath = p.join(
@@ -365,19 +444,13 @@ class CleanArchitectCli {
   Box<$boxClass> $methodName(Store store) => Box<$boxClass>(store);
 ''';
 
-    if (dryRun) {
-      _logger.info('update $modulePath');
-      return;
-    }
-
     content = _ensureImports(content, imports);
     content = _insertBeforeClassEnd(
       content,
       'abstract class DataModule',
       snippet,
     );
-    moduleFile.writeAsStringSync(_withTrailingNewline(content));
-    _logger.success('updated $modulePath');
+    return GeneratedFile(path: modulePath, content: content, allowUpdate: true);
   }
 
   String _ensureImports(String content, List<String> imports) {
@@ -429,10 +502,6 @@ class CleanArchitectCli {
     return '${content.substring(0, index)}$snippet${content.substring(index)}';
   }
 
-  String _withTrailingNewline(String content) {
-    return content.endsWith('\n') ? content : '$content\n';
-  }
-
   void _runFlutterCreate(CleanArchitectConfig config, {required bool dryRun}) {
     final presentationRoot = _packageRoot(config.paths.presentation);
     final platforms = config.flutter.platforms;
@@ -441,6 +510,11 @@ class CleanArchitectCli {
       '.',
       if (platforms.isNotEmpty) '--platforms=${platforms.join(',')}',
     ];
+
+    if (_flutterScaffoldExists(presentationRoot, platforms)) {
+      _logger.info('skip flutter create; requested platforms already exist');
+      return;
+    }
 
     if (dryRun) {
       _logger.info('run (cd $presentationRoot && flutter ${args.join(' ')})');
@@ -470,6 +544,24 @@ class CleanArchitectCli {
       _logger.info('cd $presentationRoot && flutter ${args.join(' ')}');
       _logger.detail(error.message);
     }
+  }
+
+  bool _flutterScaffoldExists(String root, List<String> platforms) {
+    if (!File(p.join(root, '.metadata')).existsSync()) return false;
+    if (platforms.isEmpty) return true;
+
+    final directories = {
+      'android': 'android',
+      'ios': 'ios',
+      'web': 'web',
+      'windows': 'windows',
+      'macos': 'macos',
+      'linux': 'linux',
+    };
+    return platforms.every(
+      (platform) =>
+          Directory(p.join(root, directories[platform]!)).existsSync(),
+    );
   }
 
   String _packageRoot(String libPath) {
@@ -514,6 +606,281 @@ class CleanArchitectCli {
       'injectable' => DependencyInjection.injectable,
       _ => null,
     };
+  }
+
+  void _validateCreateSettings(
+    ArgResults results,
+    CleanArchitectConfig config,
+    bool skipPresentation,
+  ) {
+    final dependencyInjection = results['dependency-injection'] as String?;
+    final di = results['di'] as String?;
+    if (results.wasParsed('dependency-injection') &&
+        results.wasParsed('di') &&
+        dependencyInjection != di) {
+      throw const FormatException(
+        '--dependency-injection and --di must use the same value.',
+      );
+    }
+    if (results.wasParsed('platforms') && config.flutter.platforms.isEmpty) {
+      throw const FormatException(
+        '--platforms must include at least one platform.',
+      );
+    }
+    if (results.wasParsed('platforms') && !config.flutter.createPresentation) {
+      throw const FormatException(
+        '--platforms requires Flutter creation. Add --flutter-create or '
+        'set flutter.create_presentation: true.',
+      );
+    }
+    if (skipPresentation && config.flutter.createPresentation) {
+      throw const FormatException(
+        '--skip-presentation cannot be combined with Flutter creation. '
+        'Add --no-flutter-create.',
+      );
+    }
+  }
+
+  bool _featureGenerationComplete(
+    CleanArchitectConfig config,
+    String featureName, {
+    required bool skipPresentation,
+    required bool isAuth,
+  }) {
+    if (!_featureExists(config, featureName)) return false;
+    if (skipPresentation) return true;
+
+    final feature = NameCases(featureName);
+    final paths = PathResolver(config).resolve(feature.snake);
+    final pageName = isAuth ? 'login_page.dart' : '${feature.snake}_page.dart';
+    return File(
+          p.join(
+            paths.presentation,
+            'controllers',
+            '${feature.snake}_controller.dart',
+          ),
+        ).existsSync() &&
+        File(p.join(paths.presentation, 'pages', pageName)).existsSync();
+  }
+
+  bool _featureExists(CleanArchitectConfig config, String featureName) {
+    final feature = NameCases(featureName);
+    final paths = PathResolver(config).resolve(feature.snake);
+    return File(
+          p.join(
+            paths.domain,
+            'repositories',
+            '${feature.snake}_repository.dart',
+          ),
+        ).existsSync() &&
+        File(
+          p.join(
+            paths.data,
+            'repositories',
+            '${feature.snake}_repository_impl.dart',
+          ),
+        ).existsSync();
+  }
+
+  void _requireExistingFeature(
+    CleanArchitectConfig config,
+    String featureName,
+  ) {
+    final feature = NameCases(featureName);
+    final paths = PathResolver(config).resolve(feature.snake);
+    final requiredFiles = [
+      p.join(paths.domain, 'repositories', '${feature.snake}_repository.dart'),
+      p.join(
+        paths.data,
+        'repositories',
+        '${feature.snake}_repository_impl.dart',
+      ),
+    ];
+    final missing = requiredFiles
+        .where((path) => !File(path).existsSync())
+        .toList(growable: false);
+    if (missing.isEmpty) return;
+
+    throw FormatException(
+      'Feature "${feature.snake}" does not exist. '
+      'Run "clean_architect create feature ${feature.snake}" first.',
+    );
+  }
+
+  void _validateName(String label, String value) {
+    final valid = RegExp(r'^[A-Za-z][A-Za-z0-9]*(?:[_-][A-Za-z0-9]+)*$');
+    const reserved = {
+      'abstract',
+      'as',
+      'assert',
+      'async',
+      'await',
+      'break',
+      'case',
+      'catch',
+      'class',
+      'const',
+      'continue',
+      'default',
+      'deferred',
+      'do',
+      'dynamic',
+      'else',
+      'enum',
+      'export',
+      'extends',
+      'extension',
+      'external',
+      'factory',
+      'false',
+      'final',
+      'finally',
+      'for',
+      'function',
+      'get',
+      'hide',
+      'if',
+      'implements',
+      'import',
+      'in',
+      'interface',
+      'is',
+      'late',
+      'library',
+      'mixin',
+      'new',
+      'null',
+      'of',
+      'on',
+      'operator',
+      'part',
+      'required',
+      'rethrow',
+      'return',
+      'sealed',
+      'set',
+      'show',
+      'static',
+      'super',
+      'switch',
+      'sync',
+      'this',
+      'throw',
+      'true',
+      'try',
+      'typedef',
+      'var',
+      'void',
+      'when',
+      'while',
+      'with',
+      'yield',
+    };
+    if (!valid.hasMatch(value) || reserved.contains(value.toLowerCase())) {
+      throw FormatException(
+        '$label name "$value" is invalid. Use letters, numbers, "_" or "-", '
+        'starting with a letter.',
+      );
+    }
+  }
+
+  bool _hasArgumentCount(List<String> args, int count, String usage) {
+    if (args.length == count) return true;
+    _logger.err('Usage: $usage');
+    return false;
+  }
+
+  void _usageError(String message, String usage) {
+    _logger.err(message);
+    _logger.info(usage);
+    exitCode = 64;
+  }
+
+  String _rootHelp(ArgParser parser) {
+    return '''
+clean_architect $packageVersion
+
+Usage: clean_architect <command> [arguments]
+
+Commands:
+  init      Create clean_architect.yaml.
+  create    Generate architecture, features, or feature operations.
+  doctor    Validate configuration and generated layer paths.
+
+Global options:
+  -h, --help       Show help.
+      --version    Show the installed version.
+
+${parser.usage}
+''';
+  }
+
+  String _commandHelp(String command, List<String> rest) {
+    if (command == 'init') {
+      return '''
+Usage: clean_architect init [options]
+
+Creates clean_architect.yaml in the current directory.
+
+Options:
+  -f, --force      Replace an existing config.
+      --dry-run    Print the planned change.
+  -h, --help       Show this help.
+''';
+    }
+    if (command == 'doctor') {
+      return '''
+Usage: clean_architect doctor
+
+Validates clean_architect.yaml, configured paths, and dependency reminders.
+''';
+    }
+
+    final target = rest.isEmpty ? null : rest.first;
+    final usage = switch (target) {
+      'architecture' ||
+      'base' => 'clean_architect create architecture [options]',
+      'auth' => 'clean_architect create auth [options]',
+      'feature' => 'clean_architect create feature <name> [options]',
+      'usecase' =>
+        'clean_architect create usecase <name> --feature <feature> [options]',
+      'repository' => 'clean_architect create repository <feature> [options]',
+      'remote-function' || 'remote-method' =>
+        'clean_architect create remote-function <name> --feature <feature> [options]',
+      'local-function' || 'local-method' =>
+        'clean_architect create local-function <name> --feature <feature> [options]',
+      'cached-function' || 'cached-method' =>
+        'clean_architect create cached-function <name> --feature <feature> [options]',
+      _ => 'clean_architect create <target> [options]',
+    };
+    return '''
+Usage: $usage
+
+Targets:
+  architecture                 Create the four clean architecture packages.
+  auth                         Create the auth feature.
+  feature <name>               Create a generic feature.
+  usecase <name>               Add a standalone use case.
+  repository <feature>         Add a repository pair.
+  remote-function <name>       Add a remote operation to an existing feature.
+  local-function <name>        Add a local operation to an existing feature.
+  cached-function <name>       Add remote sync and local stream operations.
+
+Common options:
+      --feature <name>          Existing feature for operation commands.
+      --dry-run                 Print the complete plan without writing.
+      --force, --overwrite      Replace conflicting generated files.
+      --skip-presentation       Do not generate presentation files.
+      --[no-]flutter-create     Enable or disable Flutter platform generation.
+      --platforms <list>        Comma-separated Flutter platforms.
+      --state <value>           getx, bloc, provider, or none.
+      --network <value>         dio or abstract.
+      --storage <value>         secure_storage, shared_preferences, hive,
+                                objectbox, or abstract.
+  -d, --dependency-injection   manual or injectable.
+      --[no-]use-either-failure
+  -h, --help                   Show this help.
+''';
   }
 
   void _doctor() {
