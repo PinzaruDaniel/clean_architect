@@ -100,17 +100,17 @@ part '${operation.snake}_entity.freezed.dart';
 @freezed
 abstract class ${operation.pascal}Entity with _\$${operation.pascal}Entity {
   const factory ${operation.pascal}Entity({
-    required String id,
+    required String remoteId,
   }) = _${operation.pascal}Entity;
 }
 '''
         : '''
 class ${operation.pascal}Entity {
   const ${operation.pascal}Entity({
-    this.id = 0,
+    required this.remoteId,
   });
 
-  final int id;
+  final String remoteId;
 }
 ''',
   );
@@ -180,10 +180,14 @@ part '${operation.snake}_box.g.dart';
 class ${operation.pascal}Box extends HiveObject {
   ${operation.pascal}Box({
     this.id = 0,
+    this.remoteId = '',
   });
 
   @HiveField(0)
   int id;
+
+  @HiveField(1)
+  String remoteId;
 }
 ''',
       LocalStorage.objectbox =>
@@ -194,10 +198,13 @@ import 'package:objectbox/objectbox.dart';
 class ${operation.pascal}Box {
   ${operation.pascal}Box({
     this.id = 0,
+    this.remoteId = '',
   });
 
   @Id()
   int id;
+
+  String remoteId;
 }
 ''',
       _ =>
@@ -205,9 +212,11 @@ class ${operation.pascal}Box {
 class ${operation.pascal}Box {
   const ${operation.pascal}Box({
     this.id = 0,
+    this.remoteId = '',
   });
 
   final int id;
+  final String remoteId;
 }
 ''',
     },
@@ -223,7 +232,7 @@ GeneratedFile _remoteMapper(
       ? '''
 
   ${operation.pascal}Box toBox() {
-    return ${operation.pascal}Box(id: int.tryParse(id) ?? 0);
+    return ${operation.pascal}Box(remoteId: id);
   }
 '''
       : '';
@@ -244,7 +253,7 @@ ${boxImport}import '../remote/models/${operation.snake}_dto.dart';
 
 extension ${operation.pascal}DtoMapper on ${operation.pascal}Dto {
   ${operation.pascal}Entity toEntity() {
-    return ${operation.pascal}Entity(id: id);
+    return ${operation.pascal}Entity(remoteId: id);
   }$dtoToBox
 }
 ''',
@@ -270,7 +279,7 @@ import '../local/models/${operation.snake}_box.dart';
 
 extension ${operation.pascal}BoxMapper on ${operation.pascal}Box {
   ${operation.pascal}Entity toEntity() {
-    return ${operation.pascal}Entity(id: id.toString());
+    return ${operation.pascal}Entity(remoteId: remoteId);
   }
 }
 ''',
@@ -290,7 +299,7 @@ import '../local/models/${operation.snake}_box.dart';
 
 extension ${operation.pascal}BoxMapper on ${operation.pascal}Box {
   ${operation.pascal}Entity toEntity() {
-    return ${operation.pascal}Entity(id: id.toString());
+    return ${operation.pascal}Entity(remoteId: remoteId);
   }
 }
 ''',
@@ -309,7 +318,7 @@ GeneratedFile _useCase(
   final methodName = repositoryMethodName ?? operation.camel;
   final returnType = _returnType(context, '${operation.pascal}Entity');
   final eitherImport = context.config.useEitherFailure
-      ? "import 'package:dartz/dartz.dart';\n\nimport '../failures/failure.dart';\n"
+      ? "import 'package:dartz/dartz.dart';\n\nimport '${_domainRootImport(context, 'failures/failure.dart')}';\n"
       : '';
 
   return GeneratedFile(
@@ -360,6 +369,11 @@ String _returnType(TemplateContext context, String valueType) {
 
 String _domainImport(TemplateContext context, String path) {
   return _packageImport(context.paths.domain, path);
+}
+
+String _domainRootImport(TemplateContext context, String path) {
+  final domainLib = p.join(_packageRoot(context.paths.domain), 'lib');
+  return _packageImport(domainLib, path);
 }
 
 String _packageImport(String basePath, String path) {

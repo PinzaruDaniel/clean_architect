@@ -689,6 +689,11 @@ data/lib/data_module.dart
 Adding another Hive feature or local/cached operation updates the same module
 with the additional adapter and box provider.
 
+Generated local models keep an integer `id` for the Hive/ObjectBox database key
+and a String `remoteId` for the API identity. DTO `id` values map to
+`Entity.remoteId` and `Box.remoteId`, so remote identifiers never overwrite local
+database keys.
+
 ### ObjectBox
 
 ```yaml
@@ -781,6 +786,41 @@ clean_architect doctor
 ```
 
 `doctor` loads `clean_architect.yaml`, checks whether configured paths exist, and prints dependency reminders for selected options such as Dio, GetX, and secure storage.
+
+## Integration Test Matrix
+
+The integration suite generates complete projects in temporary directories,
+then runs dependency resolution, code generation, and analysis in every layer.
+
+| Scenario | Coverage |
+| --- | --- |
+| `default_getx_manual_dio_secure` | Layered packages, GetX, manual DI, Dio, secure storage |
+| `bloc_injectable_hive_feature_first` | Feature first, Bloc, Injectable, Hive CE |
+| `provider_injectable_objectbox` | Layered packages, Provider, Injectable, ObjectBox |
+| `none_abstract_plain_feature_first` | Feature first, no state package, abstract sources, plain Dart models |
+| `either_enabled` | Layered packages with `Either<Failure, T>` returns |
+
+Normal `dart test` runs skip these expensive cases. Run the full matrix with:
+
+```sh
+CLEAN_ARCHITECT_INTEGRATION=all dart test test/integration/generated_project_matrix_test.dart
+```
+
+Run one scenario while developing:
+
+```sh
+CLEAN_ARCHITECT_INTEGRATION=provider_injectable_objectbox dart test test/integration/generated_project_matrix_test.dart
+```
+
+Keep generated projects after success for manual inspection:
+
+```sh
+CLEAN_ARCHITECT_INTEGRATION=all CLEAN_ARCHITECT_KEEP_INTEGRATION_PROJECTS=true dart test test/integration/generated_project_matrix_test.dart
+```
+
+Every scenario creates the architecture, auth, an `orders` feature, and remote,
+local, and cached operations. GitHub Actions runs each scenario as a separate
+matrix job.
 
 ## Publishing / Development Notes
 

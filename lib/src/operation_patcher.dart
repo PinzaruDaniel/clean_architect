@@ -123,6 +123,12 @@ $snippet}
     final methodName = kind == OperationKind.cached
         ? _localMethodName(operation)
         : operation.camel;
+    final boxConstructor =
+        config.localStorage == LocalStorage.hive ||
+            config.localStorage == LocalStorage.objectbox
+        ? '${operation.pascal}Box()'
+        : 'const ${operation.pascal}Box()';
+
     final abstractSnippet =
         '''
 
@@ -134,7 +140,7 @@ $snippet}
   @override
   Future<${operation.pascal}Box> $methodName() async {
     // TODO: Read ${operation.title.toLowerCase()} from local storage.
-    return const ${operation.pascal}Box();
+    return $boxConstructor;
   }
 ''';
 
@@ -241,8 +247,6 @@ ${implementationAnnotation}class ${feature.pascal}LocalDataSourceImpl implements
       if (config.localStorage == LocalStorage.hive)
         "import 'package:hive_ce_flutter/hive_flutter.dart';",
       if (config.localStorage == LocalStorage.objectbox)
-        "import 'package:objectbox/objectbox.dart';",
-      if (config.localStorage == LocalStorage.objectbox)
         "import 'package:path/path.dart' as p;",
       if (config.localStorage == LocalStorage.objectbox)
         "import 'package:path_provider/path_provider.dart';",
@@ -302,7 +306,8 @@ $dio$init$boxSnippet
     final imports = <String>[
       "import '../entities/${operation.snake}_entity.dart';",
       if (config.useEitherFailure) "import 'package:dartz/dartz.dart';",
-      if (config.useEitherFailure) "import '../failures/failure.dart';",
+      if (config.useEitherFailure)
+        "import '${_packageRootImport(domainPath, 'failures/failure.dart')}';",
     ];
     final methods = _repositoryMethodNames(
       operation,
@@ -341,7 +346,7 @@ abstract interface class ${feature.pascal}Repository {$methods}
       "import '${_packageImport(domainPath, 'repositories/${feature.snake}_repository.dart')}';",
       if (config.useEitherFailure) "import 'package:dartz/dartz.dart';",
       if (config.useEitherFailure)
-        "import '${_packageImport(domainPath, 'failures/failure.dart')}';",
+        "import '${_packageRootImport(domainPath, 'failures/failure.dart')}';",
       if (kind.includesRemote)
         "import '../mappers/${operation.snake}_mapper.dart';",
       if (kind == OperationKind.local)
@@ -424,7 +429,7 @@ class ${feature.pascal}RepositoryImpl implements ${feature.pascal}Repository {
     final fields = useCases
         .map(
           (useCase) =>
-              '  var ${useCase.fieldName} = GetIt.instance.get<${useCase.className}>();',
+              '  final ${useCase.fieldName} = GetIt.instance.get<${useCase.className}>();',
         )
         .join('\n');
     final methods = useCases
@@ -652,6 +657,11 @@ String _packageRoot(String libPath) {
 String _featureNameFromDataPath(String dataPath) {
   final parts = p.split(p.normalize(dataPath));
   return parts.isEmpty ? 'feature' : parts.last;
+}
+
+String _packageRootImport(String basePath, String path) {
+  final packageLib = p.join(_packageRoot(basePath), 'lib');
+  return _packageImport(packageLib, path);
 }
 
 String _packageImport(String basePath, String path) {

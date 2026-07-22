@@ -114,7 +114,7 @@ class Failure {
 String _repository(TemplateContext context) {
   final feature = context.cases;
   final eitherImport = context.config.useEitherFailure
-      ? "import 'package:dartz/dartz.dart';\n\nimport '../failures/failure.dart';\n"
+      ? "import 'package:dartz/dartz.dart';\n\nimport '${_domainRootImport(context, 'failures/failure.dart')}';\n"
       : '';
 
   return '''
@@ -129,7 +129,7 @@ abstract interface class ${feature.pascal}Repository {
 String _useCase(TemplateContext context) {
   final feature = context.cases;
   final eitherImport = context.config.useEitherFailure
-      ? "import 'package:dartz/dartz.dart';\n\nimport '../failures/failure.dart';\n"
+      ? "import 'package:dartz/dartz.dart';\n\nimport '${_domainRootImport(context, 'failures/failure.dart')}';\n"
       : '';
 
   return '''
@@ -161,10 +161,14 @@ part '${feature.snake}_box.g.dart';
 class ${feature.pascal}Box extends HiveObject {
   ${feature.pascal}Box({
     this.id = 0,
+    this.remoteId = '',
   });
 
   @HiveField(0)
   int id;
+
+  @HiveField(1)
+  String remoteId;
 }
 ''',
     LocalStorage.objectbox =>
@@ -175,10 +179,13 @@ import 'package:objectbox/objectbox.dart';
 class ${feature.pascal}Box {
   ${feature.pascal}Box({
     this.id = 0,
+    this.remoteId = '',
   });
 
   @Id()
   int id;
+
+  String remoteId;
 }
 ''',
     _ =>
@@ -186,9 +193,11 @@ class ${feature.pascal}Box {
 class ${feature.pascal}Box {
   const ${feature.pascal}Box({
     this.id = 0,
+    this.remoteId = '',
   });
 
   final int id;
+  final String remoteId;
 }
 ''',
   };
@@ -298,7 +307,7 @@ part '${feature.snake}_entity.freezed.dart';
 @freezed
 abstract class ${feature.pascal}Entity with _\$${feature.pascal}Entity {
   const factory ${feature.pascal}Entity({
-    required String id,
+    required String remoteId,
   }) = _${feature.pascal}Entity;
 }
 ''';
@@ -307,10 +316,10 @@ abstract class ${feature.pascal}Entity with _\$${feature.pascal}Entity {
   return '''
 class ${feature.pascal}Entity {
   const ${feature.pascal}Entity({
-    required this.id,
+    required this.remoteId,
   });
 
-  final String id;
+  final String remoteId;
 }
 ''';
 }
@@ -387,11 +396,22 @@ String _mapper(TemplateContext context) {
 
   return '''
 import '$entityImport';
+import '../local/models/${feature.snake}_box.dart';
 import '../remote/models/${feature.snake}_dto.dart';
 
 extension ${feature.pascal}DtoMapper on ${feature.pascal}Dto {
   ${feature.pascal}Entity toEntity() {
-    return ${feature.pascal}Entity(id: id);
+    return ${feature.pascal}Entity(remoteId: id);
+  }
+
+  ${feature.pascal}Box toBox() {
+    return ${feature.pascal}Box(remoteId: id);
+  }
+}
+
+extension ${feature.pascal}BoxMapper on ${feature.pascal}Box {
+  ${feature.pascal}Entity toEntity() {
+    return ${feature.pascal}Entity(remoteId: remoteId);
   }
 }
 ''';
@@ -444,7 +464,7 @@ String _repositoryImpl(TemplateContext context) {
   );
 
   final eitherImport = context.config.useEitherFailure
-      ? "import 'package:dartz/dartz.dart';\nimport '${_domainImport(context, 'failures/failure.dart')}';\n"
+      ? "import 'package:dartz/dartz.dart';\nimport '${_domainRootImport(context, 'failures/failure.dart')}';\n"
       : '';
   final body = context.config.useEitherFailure
       ? '''try {
@@ -563,7 +583,7 @@ String _controller(TemplateContext context) {
       (entities) => emit(
         state.copyWith(
           isLoading: false,
-          items: entities.map((entity) => entity.id).toList(growable: false),
+          items: entities.map((entity) => entity.remoteId).toList(growable: false),
         ),
       ),
     );'''
@@ -571,7 +591,7 @@ String _controller(TemplateContext context) {
     emit(
       state.copyWith(
         isLoading: false,
-        items: entities.map((entity) => entity.id).toList(growable: false),
+        items: entities.map((entity) => entity.remoteId).toList(growable: false),
       ),
     );''';
   final notifierLoad = context.config.useEitherFailure
@@ -579,13 +599,13 @@ String _controller(TemplateContext context) {
     result.fold(
       (failure) => items = const <String>[],
       (entities) => items =
-          entities.map((entity) => entity.id).toList(growable: false),
+          entities.map((entity) => entity.remoteId).toList(growable: false),
     );'''
       : '''final entities = await _get${feature.pascal}ListUseCase();
-    items = entities.map((entity) => entity.id).toList(growable: false);''';
+    items = entities.map((entity) => entity.remoteId).toList(growable: false);''';
   final assignItems = context.config.stateManagement == StateManagement.getx
-      ? 'items.assignAll(entities.map((entity) => entity.id));'
-      : 'items = entities.map((entity) => entity.id).toList(growable: false);';
+      ? 'items.assignAll(entities.map((entity) => entity.remoteId))'
+      : 'items = entities.map((entity) => entity.remoteId).toList(growable: false)';
   final clearItems = context.config.stateManagement == StateManagement.getx
       ? 'items.clear()'
       : 'items = const <String>[]';
@@ -596,7 +616,7 @@ String _controller(TemplateContext context) {
       (entities) => $assignItems,
     );'''
       : '''final entities = await _get${feature.pascal}ListUseCase();
-    $assignItems''';
+    $assignItems;''';
 
   if (context.config.stateManagement == StateManagement.bloc) {
     return '''
@@ -892,6 +912,11 @@ String _packageRoot(String libPath) {
 
 String _domainImport(TemplateContext context, String path) {
   return _packageImport(context.paths.domain, path);
+}
+
+String _domainRootImport(TemplateContext context, String path) {
+  final domainLib = p.join(_packageRoot(context.paths.domain), 'lib');
+  return _packageImport(domainLib, path);
 }
 
 String _dataImport(TemplateContext context, String path) {

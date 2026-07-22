@@ -1,0 +1,49 @@
+name: Verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: dart pub get
+      - run: dart analyze lib test
+      - run: dart test
+
+  generated-projects:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario:
+          - default_getx_manual_dio_secure
+          - bloc_injectable_hive_feature_first
+          - provider_injectable_objectbox
+          - none_abstract_plain_feature_first
+          - either_enabled
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: dart pub get
+      - name: Verify ${{ matrix.scenario }}
+        env:
+          CLEAN_ARCHITECT_INTEGRATION: ${{ matrix.scenario }}
+        run: >-
+          dart test test/integration/generated_project_matrix_test.dart
+          --reporter expanded

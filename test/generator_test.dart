@@ -326,6 +326,7 @@ void main() {
       useCase.content,
       contains('Future<Either<Failure, LoadDetailsEntity>> call()'),
     );
+    expect(useCase.content, contains('package:domain/failures/failure.dart'));
   });
 
   test('feature templates use Either Failure when configured', () {
@@ -368,6 +369,10 @@ void main() {
       repository.content,
       contains('Future<Either<Failure, List<OrdersEntity>>>'),
     );
+    expect(
+      repository.content,
+      contains('package:domain/failures/failure.dart'),
+    );
     expect(repositoryImpl.content, contains('return right('));
     expect(
       repositoryImpl.content,
@@ -378,6 +383,7 @@ void main() {
       contains('Future<Either<Failure, List<OrdersEntity>>> call()'),
     );
     expect(controller.content, contains('result.fold('));
+    expect(controller.content, isNot(contains(');,')));
   });
   test('config parses flutter create presentation settings', () {
     final directory = Directory.systemTemp.createTempSync(
@@ -514,6 +520,10 @@ clean_architect:
     );
 
     final hiveFiles = CleanArchitectGenerator(hiveConfig).feature('orders');
+    final hiveArchitectureFiles = CleanArchitectGenerator(
+      hiveConfig,
+    ).architecture();
+
     final hiveBox = hiveFiles.singleWhere(
       (file) =>
           file.path == 'data/lib/features/orders/local/models/orders_box.dart',
@@ -532,8 +542,26 @@ clean_architect:
     final hiveDataInjector = hiveFiles.singleWhere(
       (file) => file.path == 'data/lib/injector.dart',
     );
+    final hiveEntity = hiveFiles.singleWhere(
+      (file) =>
+          file.path == 'domain/lib/features/orders/entities/orders_entity.dart',
+    );
+    final hiveMapper = hiveFiles.singleWhere(
+      (file) =>
+          file.path == 'data/lib/features/orders/mappers/orders_mapper.dart',
+    );
 
     expect(hiveBox.content, contains('int id'));
+    expect(hiveBox.content, contains('@HiveField(1)'));
+    expect(hiveBox.content, contains('String remoteId'));
+    expect(hiveEntity.content, contains('required String remoteId'));
+    expect(hiveMapper.content, contains('OrdersEntity(remoteId: id)'));
+    expect(hiveMapper.content, contains('OrdersBox(remoteId: id)'));
+    expect(hiveMapper.content, contains('OrdersEntity(remoteId: remoteId)'));
+    expect(
+      hiveArchitectureFiles.map((file) => file.path),
+      isNot(contains('data/lib/data_module.dart')),
+    );
     expect(hiveLocalSource.content, contains('Hive.openBox<OrdersBox>'));
     expect(hivePubspec.content, contains('hive_ce_flutter: ^2.3.4'));
     expect(hivePubspec.content, contains('hive_ce: ^2.19.3'));
@@ -582,6 +610,7 @@ clean_architect:
 
     expect(objectBoxBox.content, contains('@Id()'));
     expect(objectBoxBox.content, contains('int id'));
+    expect(objectBoxBox.content, contains('String remoteId'));
     expect(dataModule.content, contains('@module'));
     expect(dataModule.content, contains("@Named('auth_dio')"));
     expect(dataModule.content, contains("@Named('main_dio')"));
@@ -723,6 +752,22 @@ clean_architect:
       'domain/lib/features/orders/usecases/stream_details_use_case.dart',
     ).readAsStringSync();
 
+    final entity = File(
+      'domain/lib/features/orders/entities/sync_details_entity.dart',
+    ).readAsStringSync();
+    final dto = File(
+      'data/lib/features/orders/remote/models/sync_details_dto.dart',
+    ).readAsStringSync();
+    final box = File(
+      'data/lib/features/orders/local/models/sync_details_box.dart',
+    ).readAsStringSync();
+    final remoteMapper = File(
+      'data/lib/features/orders/mappers/sync_details_mapper.dart',
+    ).readAsStringSync();
+    final localMapper = File(
+      'data/lib/features/orders/mappers/sync_details_box_mapper.dart',
+    ).readAsStringSync();
+
     for (final content in [
       remoteSource,
       repository,
@@ -739,12 +784,20 @@ clean_architect:
     ]) {
       expect(content, contains('streamDetails()'));
     }
+    expect(localSource, contains('return SyncDetailsBox();'));
     expect(remoteUseCase, contains('_repository.syncDetails()'));
     expect(cacheUseCase, contains('_repository.streamDetails()'));
     expect(remoteUseCase, contains('class SyncDetailsUseCase'));
     expect(cacheUseCase, contains('class StreamDetailsUseCase'));
-    expect(controller, contains('_syncDetailsUseCase'));
-    expect(controller, contains('_streamDetailsUseCase'));
+    expect(controller, contains('final _syncDetailsUseCase'));
+    expect(controller, contains('final _streamDetailsUseCase'));
+    expect(entity, contains('required String remoteId'));
+    expect(dto, contains('required String id'));
+    expect(box, contains('int id'));
+    expect(box, contains('String remoteId'));
+    expect(remoteMapper, contains('SyncDetailsEntity(remoteId: id)'));
+    expect(remoteMapper, contains('SyncDetailsBox(remoteId: id)'));
+    expect(localMapper, contains('SyncDetailsEntity(remoteId: remoteId)'));
     expect(repository, isNot(contains('syncDetailsRemote()')));
     expect(repository, isNot(contains('syncDetailsCache()')));
   });

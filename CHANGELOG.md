@@ -1,3 +1,13 @@
+## 0.4.0
+
+- Added a generated-project integration matrix covering five representative configurations, both structure modes, auth, generic features, and all operation commands.
+- Added real `pub get`, `build_runner`, and per-layer analysis validation for generated temporary projects.
+- Added a sharded GitHub Actions workflow for unit and generated-project verification.
+- Fixed plain-Dart operation entities to use the same String ID contract as DTOs and Freezed entities.
+- Fixed package-root `Failure` imports for Either-enabled feature and operation files.
+- Fixed GetX Either fold syntax and made operation-added controller dependencies final.
+- Separated local integer box IDs from API-provided remote IDs in generated feature and operation models.
+
 ## 0.3.0
 
 - Updated package and generated-project dependencies to current compatible releases.

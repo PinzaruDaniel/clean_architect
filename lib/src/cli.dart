@@ -347,11 +347,7 @@ class CleanArchitectCli {
         .split(p.separator)
         .join('/');
 
-    final imports = <String>[
-      if (config.localStorage == LocalStorage.objectbox)
-        "import 'package:objectbox/objectbox.dart';",
-      "import '$boxImportPath';",
-    ];
+    final imports = <String>["import '$boxImportPath';"];
     final snippet = config.localStorage == LocalStorage.hive
         ? '''
   @lazySingleton

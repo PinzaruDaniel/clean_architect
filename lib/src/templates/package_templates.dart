@@ -19,6 +19,7 @@ const _getItVersion = '^9.2.1';
 List<GeneratedFile> packageTemplates(
   TemplateContext context, {
   required bool includePresentation,
+  bool includeDataModule = true,
 }) {
   final files = <GeneratedFile>[
     GeneratedFile(
@@ -34,7 +35,7 @@ List<GeneratedFile> packageTemplates(
       content: _diPubspec(context),
     ),
     ..._injectableFiles(context),
-    ..._dataModuleFiles(context),
+    if (includeDataModule) ..._dataModuleFiles(context),
   ];
 
   if (includePresentation) {
@@ -166,8 +167,6 @@ String _dataModule(TemplateContext context) {
       "import 'package:dio/dio.dart';",
     if (context.config.localStorage == LocalStorage.hive)
       "import 'package:hive_ce_flutter/hive_flutter.dart';",
-    if (context.config.localStorage == LocalStorage.objectbox)
-      "import 'package:objectbox/objectbox.dart';",
     if (context.config.localStorage == LocalStorage.objectbox)
       "import 'package:path/path.dart' as p;",
     if (context.config.localStorage == LocalStorage.objectbox)

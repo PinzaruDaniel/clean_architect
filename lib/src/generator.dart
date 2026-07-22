@@ -27,7 +27,11 @@ class CleanArchitectGenerator {
     );
 
     return [
-      ...packageTemplates(context, includePresentation: !skipPresentation),
+      ...packageTemplates(
+        context,
+        includePresentation: !skipPresentation,
+        includeDataModule: false,
+      ),
       ...architectureTemplates(context),
     ];
   }
