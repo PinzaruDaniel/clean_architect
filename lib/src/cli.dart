@@ -11,6 +11,7 @@ import 'generator.dart';
 import 'generated_file.dart';
 import 'operation_patcher.dart';
 import 'path_resolver.dart';
+import 'project_doctor.dart';
 import 'templates/operation_templates.dart';
 import 'version.dart';
 
@@ -832,7 +833,7 @@ Options:
       return '''
 Usage: clean_architect doctor
 
-Validates clean_architect.yaml, configured paths, and dependency reminders.
+Validates layer pubspecs, dependencies, tools, package roots, and generated files.
 ''';
     }
 
@@ -886,35 +887,23 @@ Common options:
   void _doctor() {
     final configFile = File(CleanArchitectConfig.fileName);
     if (!configFile.existsSync()) {
-      _logger.warn('clean_architect.yaml not found. Run clean_architect init.');
+      _logger.err('clean_architect.yaml not found. Run clean_architect init.');
+      exitCode = 1;
       return;
     }
 
     final config = CleanArchitectConfig.fromFile(configFile);
-    _logger.success('config loaded');
-    _checkPath('domain', config.paths.domain);
-    _checkPath('data', config.paths.data);
-    _checkPath('presentation', config.paths.presentation);
-    _checkPath('di', config.paths.di);
-
-    if (config.network == NetworkClient.dio) {
-      _logger.info('dependency check: add dio to the target project');
+    final report = ProjectDoctor(config: config).run();
+    for (final diagnostic in report.diagnostics) {
+      switch (diagnostic.level) {
+        case DoctorLevel.success:
+          _logger.success(diagnostic.message);
+        case DoctorLevel.warning:
+          _logger.warn(diagnostic.message);
+        case DoctorLevel.error:
+          _logger.err(diagnostic.message);
+      }
     }
-    if (config.localStorage == LocalStorage.secureStorage) {
-      _logger.info(
-        'dependency check: add flutter_secure_storage to the target project',
-      );
-    }
-    if (config.stateManagement == StateManagement.getx) {
-      _logger.info('dependency check: add get to the target project');
-    }
-  }
-
-  void _checkPath(String label, String path) {
-    if (Directory(path).existsSync()) {
-      _logger.success('$label path exists: $path');
-    } else {
-      _logger.warn('$label path does not exist yet: $path');
-    }
+    if (report.hasErrors) exitCode = 1;
   }
 }

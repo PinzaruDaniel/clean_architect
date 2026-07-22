@@ -1,3 +1,12 @@
+## 0.6.0
+
+- Replaced doctor reminders with real validation of all configured layer pubspecs and package roots.
+- Added required dependency and compatible version-constraint checks.
+- Added Dart and Flutter SDK compatibility checks plus per-package build_runner availability checks.
+- Added detection for missing referenced `.g.dart` files.
+- Made `clean_architect doctor` return exit code 1 when project checks fail.
+- Added doctor coverage to the generated-project integration matrix.
+
 ## 0.5.0
 
 - Added `clean_architect --version` and command-specific help.

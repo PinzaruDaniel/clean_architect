@@ -807,12 +807,23 @@ clean_architect create auth --force
 clean_architect doctor
 ```
 
-`doctor` loads `clean_architect.yaml`, checks whether configured paths exist, and prints dependency reminders for selected options such as Dio, GetX, and secure storage.
+`doctor` validates the complete generated project:
+
+- Every configured package root and layer path exists and is structurally valid.
+- Each layer has a readable `pubspec.yaml` whose package name matches its root.
+- Required dependencies and dev dependencies are present with compatible version constraints.
+- Local path dependencies resolve to the configured domain, data, and DI packages.
+- The active Dart and Flutter versions satisfy the generated package constraints.
+- `build_runner` is declared and resolved in every package that needs it.
+- Every referenced generated `.g.dart` file exists.
+
+A healthy project exits with code `0`. Failed validation exits with code `1`, so
+`clean_architect doctor` can be used directly in CI.
 
 ## Integration Test Matrix
 
 The integration suite generates complete projects in temporary directories,
-then runs dependency resolution, code generation, and analysis in every layer.
+then runs dependency resolution, code generation, analysis in every layer, and the project doctor.
 
 | Scenario | Coverage |
 | --- | --- |
@@ -841,7 +852,7 @@ CLEAN_ARCHITECT_INTEGRATION=all CLEAN_ARCHITECT_KEEP_INTEGRATION_PROJECTS=true d
 ```
 
 Every scenario creates the architecture, auth, an `orders` feature, and remote,
-local, and cached operations. GitHub Actions runs each scenario as a separate
+local, and cached operations, then requires `clean_architect doctor` to pass. GitHub Actions runs each scenario as a separate
 matrix job.
 
 ## Publishing / Development Notes

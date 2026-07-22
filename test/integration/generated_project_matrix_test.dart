@@ -82,6 +82,17 @@ Future<void> _runScenario(_Scenario scenario) async {
       );
     }
 
+    await _run(
+      Platform.resolvedExecutable,
+      [
+        '--packages=${p.join(repository.path, '.dart_tool', 'package_config.json')}',
+        p.join(repository.path, 'bin', 'clean_architect.dart'),
+        'doctor',
+      ],
+      workingDirectory: project.path,
+      label: 'clean_architect doctor',
+    );
+
     succeeded = true;
   } finally {
     final keep = Platform.environment[_keepVariable] == 'true';
