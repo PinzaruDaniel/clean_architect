@@ -160,6 +160,7 @@ class CleanArchitectCli {
     };
     if (requestedFeature != null) {
       _validateName('Feature', requestedFeature);
+      _validateVerticalFeaturePackageName(config, requestedFeature);
     }
     if (!overwrite &&
         requestedFeature != null &&
@@ -182,6 +183,11 @@ class CleanArchitectCli {
       _validateName('Feature', featureOption);
       _requireExistingFeature(config, featureOption);
     }
+    if (config.structure == ProjectStructure.verticalPackages &&
+        args.first == 'usecase' &&
+        featureOption != null) {
+      _requireExistingFeature(config, featureOption);
+    }
 
     final generated = _filesForCreate(
       args,
@@ -198,6 +204,8 @@ class CleanArchitectCli {
     final files = <GeneratedFile>[...generated];
     final modulePatch = _planFeatureDataModulePatch(args, config);
     if (modulePatch != null) files.add(modulePatch);
+    final appPubspecPatch = _planVerticalAppPubspecPatch(args, config);
+    if (appPubspecPatch != null) files.add(appPubspecPatch);
 
     if (operationKind != null) {
       files.addAll(
@@ -302,6 +310,7 @@ class CleanArchitectCli {
           return null;
         }
         _validateName('Feature', args[1]);
+        _validateVerticalFeaturePackageName(generator.config, args[1]);
         return generator.repository(args[1]);
       default:
         _logger.err('Unknown create target: ${args.first}');
@@ -387,6 +396,7 @@ class CleanArchitectCli {
     CleanArchitectConfig config,
   ) {
     if (args.isEmpty) return null;
+    if (config.structure == ProjectStructure.verticalPackages) return null;
     if (config.dependencyInjection != DependencyInjection.injectable) {
       return null;
     }
@@ -398,6 +408,7 @@ class CleanArchitectCli {
     final featureName = switch (args.first) {
       'auth' => 'auth',
       'feature' when args.length >= 2 => args[1],
+      'repository' when args.length >= 2 => args[1],
       _ => null,
     };
     if (featureName == null || featureName.isEmpty) return null;
@@ -453,6 +464,60 @@ class CleanArchitectCli {
     return GeneratedFile(path: modulePath, content: content, allowUpdate: true);
   }
 
+  GeneratedFile? _planVerticalAppPubspecPatch(
+    List<String> args,
+    CleanArchitectConfig config,
+  ) {
+    if (config.structure != ProjectStructure.verticalPackages || args.isEmpty) {
+      return null;
+    }
+    final featureName = switch (args.first) {
+      'auth' => 'auth',
+      'feature' when args.length >= 2 => args[1],
+      _ => null,
+    };
+    if (featureName == null) return null;
+
+    final feature = NameCases(featureName);
+    final appRoot = _packageRoot(config.paths.app);
+    final appPubspec = File(p.join(appRoot, 'pubspec.yaml'));
+    if (!appPubspec.existsSync()) return null;
+
+    var content = appPubspec.readAsStringSync();
+    final dependencyPattern = RegExp(
+      '^  ${RegExp.escape(feature.snake)}:\\s*\$',
+      multiLine: true,
+    );
+    if (dependencyPattern.hasMatch(content)) return null;
+
+    final featureRoot = p.join(config.paths.features, feature.snake);
+    final relativePath = p
+        .relative(featureRoot, from: appRoot)
+        .split(p.separator)
+        .join('/');
+    final dependency =
+        '''
+  ${feature.snake}:
+    path: $relativePath
+''';
+    final devDependencies = content.indexOf('\ndev_dependencies:');
+    if (devDependencies == -1) {
+      throw const FormatException(
+        'The vertical app pubspec has no dev_dependencies section.',
+      );
+    }
+    content = content.replaceRange(
+      devDependencies,
+      devDependencies,
+      dependency,
+    );
+    return GeneratedFile(
+      path: appPubspec.path,
+      content: content,
+      allowUpdate: true,
+    );
+  }
+
   String _ensureImports(String content, List<String> imports) {
     var result = content;
     for (final import in imports.toSet()) {
@@ -503,7 +568,11 @@ class CleanArchitectCli {
   }
 
   void _runFlutterCreate(CleanArchitectConfig config, {required bool dryRun}) {
-    final presentationRoot = _packageRoot(config.paths.presentation);
+    final presentationRoot = _packageRoot(
+      config.structure == ProjectStructure.verticalPackages
+          ? config.paths.app
+          : config.paths.presentation,
+    );
     final platforms = config.flutter.platforms;
     final args = [
       'create',
@@ -797,6 +866,24 @@ class CleanArchitectCli {
     }
   }
 
+  void _validateVerticalFeaturePackageName(
+    CleanArchitectConfig config,
+    String value,
+  ) {
+    if (config.structure != ProjectStructure.verticalPackages) return;
+    final featureName = NameCases(value).snake;
+    final reservedPackageNames = {
+      p.basename(_packageRoot(config.paths.app)),
+      p.basename(_packageRoot(config.paths.core)),
+    };
+    if (reservedPackageNames.contains(featureName)) {
+      throw FormatException(
+        'Feature "$featureName" conflicts with a vertical app or core '
+        'package name.',
+      );
+    }
+  }
+
   bool _hasArgumentCount(List<String> args, int count, String usage) {
     if (args.length == count) return true;
     _logger.err('Usage: $usage');
@@ -818,7 +905,7 @@ Usage: clean_architect <command> [arguments]
 Commands:
   init      Create clean_architect.yaml.
   create    Generate architecture, features, or feature operations.
-  doctor    Validate configuration and generated layer paths.
+  doctor    Validate configuration and generated packages.
 
 Global options:
   -h, --help       Show help.
@@ -870,7 +957,7 @@ Validates layer pubspecs, dependencies, tools, package roots, and generated file
 Usage: $usage
 
 Targets:
-  architecture                 Create the four clean architecture packages.
+  architecture                 Create the configured clean architecture.
   auth                         Create the auth feature.
   feature <name>               Create a generic feature.
   usecase <name>               Add a standalone use case.

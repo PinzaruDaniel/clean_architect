@@ -65,11 +65,15 @@ void main() {
       'data',
       'presentation',
       'di',
+      'app',
+      'core',
+      'features',
     ]);
 
     expect(ProjectStructure.values.map((value) => value.name), [
       'featureFirst',
       'layeredPackages',
+      'verticalPackages',
     ]);
     expect(StateManagement.values.map((value) => value.name), [
       'getx',
@@ -100,6 +104,9 @@ void main() {
     expect(defaults.paths.data, 'data/lib/features');
     expect(defaults.paths.presentation, 'presentation/lib');
     expect(defaults.paths.di, 'di/lib');
+    expect(defaults.paths.app, 'app/lib');
+    expect(defaults.paths.core, 'packages/core/lib');
+    expect(defaults.paths.features, 'packages/features');
 
     final layered = PathResolver(defaults).resolve('user_profile');
     expect(layered.domain, p.join('domain', 'lib', 'features', 'user_profile'));

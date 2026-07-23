@@ -38,6 +38,18 @@ class PathResolver {
         presentation: config.paths.presentation,
         di: config.paths.di,
       ),
+      ProjectStructure.verticalPackages => FeaturePaths(
+        domain: p.join(config.paths.features, feature, 'lib', 'src', 'domain'),
+        data: p.join(config.paths.features, feature, 'lib', 'src', 'data'),
+        presentation: p.join(
+          config.paths.features,
+          feature,
+          'lib',
+          'src',
+          'presentation',
+        ),
+        di: p.join(config.paths.features, feature, 'lib', 'src', 'di'),
+      ),
     };
   }
 }

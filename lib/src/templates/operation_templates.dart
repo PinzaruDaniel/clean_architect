@@ -13,7 +13,8 @@ List<GeneratedFile> operationTemplates(
 }) {
   final files = <GeneratedFile>[];
 
-  if (context.config.useEitherFailure) {
+  if (context.config.useEitherFailure &&
+      context.config.structure != ProjectStructure.verticalPackages) {
     files.add(_failure(context));
   }
 
@@ -362,7 +363,7 @@ GeneratedFile _useCase(
   final methodName = repositoryMethodName ?? operation.camel;
   final returnType = _returnType(context, '${operation.pascal}Entity');
   final eitherImport = context.config.useEitherFailure
-      ? "import 'package:dartz/dartz.dart';\n\nimport '${_domainRootImport(context, 'failures/failure.dart')}';\n"
+      ? "import 'package:dartz/dartz.dart';\n\nimport '${_failureImport(context)}';\n"
       : '';
 
   return GeneratedFile(
@@ -420,6 +421,13 @@ String _domainRootImport(TemplateContext context, String path) {
   return _packageImport(domainLib, path);
 }
 
+String _failureImport(TemplateContext context) {
+  if (context.config.structure == ProjectStructure.verticalPackages) {
+    return 'package:${_packageName(context.config.paths.core)}/core.dart';
+  }
+  return _domainRootImport(context, 'failures/failure.dart');
+}
+
 String _packageImport(String basePath, String path) {
   final parts = p.split(p.normalize(basePath));
   final libIndex = parts.indexOf('lib');
@@ -435,4 +443,11 @@ String _packageRoot(String libPath) {
   final libIndex = parts.indexOf('lib');
   if (libIndex == -1) return libPath;
   return p.joinAll(parts.take(libIndex));
+}
+
+String _packageName(String libPath) {
+  final parts = p.split(p.normalize(libPath));
+  final libIndex = parts.indexOf('lib');
+  if (libIndex > 0) return parts[libIndex - 1];
+  return p.basename(libPath);
 }

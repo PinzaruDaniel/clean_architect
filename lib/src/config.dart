@@ -4,7 +4,7 @@ import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
 import 'package:yaml/yaml.dart';
 
-enum ProjectStructure { featureFirst, layeredPackages }
+enum ProjectStructure { featureFirst, layeredPackages, verticalPackages }
 
 enum StateManagement { getx, bloc, provider, none }
 
@@ -56,6 +56,9 @@ class CleanArchitectConfig {
         data: 'data/lib/features',
         presentation: 'presentation/lib',
         di: 'di/lib',
+        app: 'app/lib',
+        core: 'packages/core/lib',
+        features: 'packages/features',
       ),
     );
   }
@@ -163,6 +166,9 @@ class CleanArchitectConfig {
           defaults.paths.presentation,
         ),
         di: _stringValue(paths, 'di', defaults.paths.di),
+        app: _stringValue(paths, 'app', defaults.paths.app),
+        core: _stringValue(paths, 'core', defaults.paths.core),
+        features: _stringValue(paths, 'features', defaults.paths.features),
       ),
     );
     config.validate();
@@ -187,7 +193,7 @@ class CleanArchitectConfig {
     return '''
 clean_architect:
   config_version: $currentConfigVersion
-  structure: layered_packages # layered_packages or feature_first
+  structure: layered_packages # layered_packages, feature_first, or vertical_packages
   state_management: getx # getx, bloc, provider, or none
   network: dio # dio or abstract
   local_storage: secure_storage # secure_storage, shared_preferences, hive, objectbox, or abstract
@@ -207,6 +213,9 @@ clean_architect:
     data: data/lib/features
     presentation: presentation/lib
     di: di/lib
+    app: app/lib
+    core: packages/core/lib
+    features: packages/features
 ''';
   }
 
@@ -245,6 +254,44 @@ clean_architect:
       throw const FormatException(
         'Flutter platforms must not contain duplicates.',
       );
+    }
+
+    if (structure == ProjectStructure.verticalPackages) {
+      _validateLayerPath('app', paths.app);
+      _validateLayerPath('core', paths.core);
+      _validatePackageParentPath('features', paths.features);
+
+      final appRoot = _packageRoot(paths.app);
+      final coreRoot = _packageRoot(paths.core);
+      final appName = p.basename(appRoot);
+      final coreName = p.basename(coreRoot);
+      _validatePackageName('app', appName);
+      _validatePackageName('core', coreName);
+      if (appName == coreName) {
+        throw const FormatException(
+          'Vertical app and core packages must have different package names.',
+        );
+      }
+      if (appName == 'base_feature' || coreName == 'base_feature') {
+        throw const FormatException(
+          'Vertical app and core package names must not be "base_feature".',
+        );
+      }
+      if (appRoot == coreRoot ||
+          p.isWithin(appRoot, coreRoot) ||
+          p.isWithin(coreRoot, appRoot)) {
+        throw const FormatException(
+          'Vertical app and core package roots must be distinct and not nested.',
+        );
+      }
+      final featuresRoot = p.normalize(paths.features);
+      if (_pathsOverlap(featuresRoot, appRoot) ||
+          _pathsOverlap(featuresRoot, coreRoot)) {
+        throw const FormatException(
+          'Vertical app, core, and features roots must not be nested.',
+        );
+      }
+      return;
     }
 
     final configuredPaths = {
@@ -299,12 +346,18 @@ class PathConfig {
     required this.data,
     required this.presentation,
     required this.di,
+    this.app = 'app/lib',
+    this.core = 'packages/core/lib',
+    this.features = 'packages/features',
   });
 
   final String domain;
   final String data;
   final String presentation;
   final String di;
+  final String app;
+  final String core;
+  final String features;
 }
 
 YamlMap? _mapSection(YamlMap root, String key) {
@@ -344,6 +397,38 @@ void _validateLayerPath(String label, String value) {
       '"$value". Use a public directory below lib instead.',
     );
   }
+}
+
+void _validatePackageParentPath(String label, String value) {
+  if (value.trim().isEmpty) {
+    throw FormatException('$label path must not be empty.');
+  }
+  if (p.isAbsolute(value) || p.windows.isAbsolute(value)) {
+    throw FormatException('$label path must be relative: "$value".');
+  }
+  if (p.split(value).contains('..')) {
+    throw FormatException('$label path must not contain "..": "$value".');
+  }
+  if (p.split(p.normalize(value)).contains('lib')) {
+    throw FormatException(
+      '$label path must point to a package parent, not a lib directory: '
+      '"$value".',
+    );
+  }
+}
+
+void _validatePackageName(String label, String value) {
+  final valid = RegExp(r'^[a-z][a-z0-9_]*$');
+  if (!valid.hasMatch(value)) {
+    throw FormatException(
+      '$label package name "$value" is invalid. Use lowercase letters, '
+      'numbers, and underscores, starting with a letter.',
+    );
+  }
+}
+
+bool _pathsOverlap(String left, String right) {
+  return left == right || p.isWithin(left, right) || p.isWithin(right, left);
 }
 
 String _packageRoot(String path) {
@@ -413,6 +498,7 @@ String _structureName(ProjectStructure structure) {
   return switch (structure) {
     ProjectStructure.featureFirst => 'feature_first',
     ProjectStructure.layeredPackages => 'layered_packages',
+    ProjectStructure.verticalPackages => 'vertical_packages',
   };
 }
 

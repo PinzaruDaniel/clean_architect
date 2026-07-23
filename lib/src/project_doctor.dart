@@ -6,6 +6,7 @@ import 'package:pub_semver/pub_semver.dart';
 import 'package:yaml/yaml.dart';
 
 import 'config.dart';
+import 'generated_file.dart';
 import 'generator.dart';
 
 enum DoctorLevel { success, warning, error }
@@ -81,6 +82,44 @@ class ProjectDoctor {
   }
 
   List<_Layer> _layers() {
+    if (config.structure == ProjectStructure.verticalPackages) {
+      final layers = <_Layer>[
+        _layer('app', config.paths.app),
+        _layer('core', config.paths.core),
+      ];
+      final featuresRoot = Directory(
+        p.join(projectRoot, config.paths.features),
+      );
+      if (!featuresRoot.existsSync()) {
+        _error('Features package root does not exist: ${featuresRoot.path}.');
+        return layers;
+      }
+
+      final featureDirectories =
+          featuresRoot
+              .listSync()
+              .whereType<Directory>()
+              .where(
+                (directory) =>
+                    File(p.join(directory.path, 'pubspec.yaml')).existsSync(),
+              )
+              .toList(growable: false)
+            ..sort((left, right) => left.path.compareTo(right.path));
+      if (featureDirectories.isEmpty) {
+        _error('No feature packages were found in ${featuresRoot.path}.');
+      }
+      for (final directory in featureDirectories) {
+        final relativeRoot = p.relative(directory.path, from: projectRoot);
+        layers.add(
+          _layer(
+            'feature:${p.basename(directory.path)}',
+            p.join(relativeRoot, 'lib'),
+          ),
+        );
+      }
+      return layers;
+    }
+
     return [
       _layer('domain', config.paths.domain),
       _layer('data', config.paths.data),
@@ -187,7 +226,10 @@ class ProjectDoctor {
   }
 
   YamlMap? _expectedPubspec(_Layer layer) {
-    final files = CleanArchitectGenerator(config).architecture();
+    final generator = CleanArchitectGenerator(config);
+    final files = config.structure == ProjectStructure.verticalPackages
+        ? _verticalExpectedFiles(generator, layer)
+        : generator.architecture();
     final expectedPath = p.normalize(
       p.join(layer.relativeRoot, 'pubspec.yaml'),
     );
@@ -200,6 +242,23 @@ class ProjectDoctor {
     }
     final value = loadYaml(generated.single.content);
     return value is YamlMap ? value : null;
+  }
+
+  List<GeneratedFile> _verticalExpectedFiles(
+    CleanArchitectGenerator generator,
+    _Layer layer,
+  ) {
+    if (layer.label.startsWith('feature:')) {
+      return generator.feature(layer.label.substring('feature:'.length));
+    }
+    if (layer.label == 'app') {
+      final feature = _layers()
+          .where((item) => item.label.startsWith('feature:'))
+          .map((item) => item.label.substring('feature:'.length))
+          .firstOrNull;
+      if (feature != null) return generator.feature(feature);
+    }
+    return generator.architecture();
   }
 
   void _checkEnvironment(_Pubspec actual, YamlMap expected) {

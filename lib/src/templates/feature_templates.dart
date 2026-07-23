@@ -8,7 +8,11 @@ import '../generator.dart';
 List<GeneratedFile> featureTemplates(TemplateContext context) {
   final feature = context.cases;
   final files = <GeneratedFile>[
-    if (context.config.useEitherFailure) _failure(context),
+    if (context.config.structure == ProjectStructure.verticalPackages)
+      _publicLibrary(context),
+    if (context.config.useEitherFailure &&
+        context.config.structure != ProjectStructure.verticalPackages)
+      _failure(context),
     GeneratedFile(
       path: p.join(
         context.paths.domain,
@@ -93,6 +97,37 @@ List<GeneratedFile> featureTemplates(TemplateContext context) {
   return files;
 }
 
+GeneratedFile _publicLibrary(TemplateContext context) {
+  final feature = context.cases;
+  final exports = <String>[
+    "export 'src/domain/entities/${feature.snake}_entity.dart';",
+    "export 'src/domain/repositories/${feature.snake}_repository.dart';",
+    "export 'src/domain/usecases/get_${feature.snake}_list_use_case.dart';",
+    if (!context.skipPresentation)
+      "export 'src/presentation/controllers/${feature.snake}_controller.dart';",
+    if (!context.skipPresentation)
+      "export 'src/presentation/pages/${feature.snake}_page.dart';",
+    if (context.config.dependencyInjection == DependencyInjection.injectable)
+      "export 'src/di/injector.dart';"
+    else
+      "export 'src/di/${feature.snake}_di.dart';",
+  ];
+  return GeneratedFile(
+    path: p.join(
+      _packageRoot(context.paths.domain),
+      'lib',
+      '${feature.snake}.dart',
+    ),
+    content:
+        '''
+/// Public API for the ${feature.title} feature.
+library;
+
+${exports.join('\n')}
+''',
+  );
+}
+
 GeneratedFile _failure(TemplateContext context) {
   return GeneratedFile(
     path: p.join(
@@ -114,7 +149,7 @@ class Failure {
 String _repository(TemplateContext context) {
   final feature = context.cases;
   final eitherImport = context.config.useEitherFailure
-      ? "import 'package:dartz/dartz.dart';\n\nimport '${_domainRootImport(context, 'failures/failure.dart')}';\n"
+      ? "import 'package:dartz/dartz.dart';\n\nimport '${_failureImport(context)}';\n"
       : '';
 
   return '''
@@ -129,7 +164,7 @@ abstract interface class ${feature.pascal}Repository {
 String _useCase(TemplateContext context) {
   final feature = context.cases;
   final eitherImport = context.config.useEitherFailure
-      ? "import 'package:dartz/dartz.dart';\n\nimport '${_domainRootImport(context, 'failures/failure.dart')}';\n"
+      ? "import 'package:dartz/dartz.dart';\n\nimport '${_failureImport(context)}';\n"
       : '';
 
   return '''
@@ -489,7 +524,7 @@ String _repositoryImpl(TemplateContext context) {
   );
 
   final eitherImport = context.config.useEitherFailure
-      ? "import 'package:dartz/dartz.dart';\nimport '${_domainRootImport(context, 'failures/failure.dart')}';\n"
+      ? "import 'package:dartz/dartz.dart';\nimport '${_failureImport(context)}';\n"
       : '';
   final body = context.config.useEitherFailure
       ? '''try {
@@ -944,6 +979,13 @@ String _domainRootImport(TemplateContext context, String path) {
   return _packageImport(domainLib, path);
 }
 
+String _failureImport(TemplateContext context) {
+  if (context.config.structure == ProjectStructure.verticalPackages) {
+    return 'package:${_packageName(context.config.paths.core)}/core.dart';
+  }
+  return _domainRootImport(context, 'failures/failure.dart');
+}
+
 String _dataImport(TemplateContext context, String path) {
   return _packageImport(context.paths.data, path);
 }
@@ -960,6 +1002,13 @@ String _packageImport(String basePath, String path) {
   final packageName = parts[libIndex - 1];
   final libPath = p.url.joinAll(parts.skip(libIndex + 1).followedBy([path]));
   return 'package:$packageName/$libPath';
+}
+
+String _packageName(String libPath) {
+  final parts = p.split(p.normalize(libPath));
+  final libIndex = parts.indexOf('lib');
+  if (libIndex > 0) return parts[libIndex - 1];
+  return p.basename(libPath);
 }
 
 String _injectableImport(TemplateContext context) {

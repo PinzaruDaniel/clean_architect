@@ -29,7 +29,7 @@ class OperationPatcher {
     }
     if (kind.includesLocal) {
       _patchLocalSource(paths.data, feature, operation, kind);
-      _patchDataModule(paths.data, operation);
+      _patchDataModule(paths.data, feature, operation);
     }
 
     _patchRepository(paths.domain, feature, operation, kind);
@@ -41,7 +41,44 @@ class OperationPatcher {
       operation,
       kind,
     );
+    _patchPublicLibrary(paths.domain, feature, operation, kind);
     return List<GeneratedFile>.unmodifiable(_files);
+  }
+
+  void _patchPublicLibrary(
+    String domainPath,
+    NameCases feature,
+    NameCases operation,
+    OperationKind kind,
+  ) {
+    if (config.structure != ProjectStructure.verticalPackages) return;
+    final path = p.join(
+      _packageRoot(domainPath),
+      'lib',
+      '${feature.snake}.dart',
+    );
+    final file = File(path);
+    if (!file.existsSync()) return;
+
+    final useCaseNames = kind == OperationKind.cached
+        ? [
+            NameCases(_remoteMethodName(operation, kind)).snake,
+            NameCases(_localMethodName(operation)).snake,
+          ]
+        : [operation.snake];
+    final exports = <String>[
+      "export 'src/domain/entities/${operation.snake}_entity.dart';",
+      for (final useCaseName in useCaseNames)
+        "export 'src/domain/usecases/${useCaseName}_use_case.dart';",
+    ];
+    var content = file.readAsStringSync();
+    var changed = false;
+    for (final export in exports) {
+      if (content.contains(export)) continue;
+      content = '${content.trimRight()}\n$export\n';
+      changed = true;
+    }
+    if (changed) _write(path, content);
   }
 
   void _patchRemoteSource(
@@ -181,16 +218,24 @@ ${implementationAnnotation}class ${feature.pascal}LocalDataSourceImpl implements
     _write(path, content);
   }
 
-  void _patchDataModule(String dataPath, NameCases operation) {
+  void _patchDataModule(
+    String dataPath,
+    NameCases feature,
+    NameCases operation,
+  ) {
     if (config.dependencyInjection != DependencyInjection.injectable) return;
     if (config.localStorage != LocalStorage.hive &&
         config.localStorage != LocalStorage.objectbox) {
       return;
     }
 
-    final path = p.join(_packageRoot(dataPath), 'lib', 'data_module.dart');
-    final importLine =
-        "import 'features/${_featureNameFromDataPath(dataPath)}/local/models/${operation.snake}_box.dart';";
+    final isVertical = config.structure == ProjectStructure.verticalPackages;
+    final path = isVertical
+        ? p.join(_packageRoot(dataPath), 'lib', 'src', 'di', 'data_module.dart')
+        : p.join(_packageRoot(dataPath), 'lib', 'data_module.dart');
+    final importLine = isVertical
+        ? "import '../data/local/models/${operation.snake}_box.dart';"
+        : "import 'features/${feature.snake}/local/models/${operation.snake}_box.dart';";
     final methodName = '${operation.camel}Box';
     final boxClass = '${operation.pascal}Box';
     final snippet = config.localStorage == LocalStorage.hive
@@ -199,7 +244,7 @@ ${implementationAnnotation}class ${feature.pascal}LocalDataSourceImpl implements
   @preResolve
   Future<Box<$boxClass>> $methodName() async {
     await Hive.initFlutter();
-    if (!Hive.isAdapterRegistered(${stableHiveTypeId('${_featureNameFromDataPath(dataPath)}_${operation.snake}')})) {
+    if (!Hive.isAdapterRegistered(${stableHiveTypeId('${feature.snake}_${operation.snake}')})) {
       Hive.registerAdapter(${boxClass}Adapter());
     }
     return Hive.openBox<$boxClass>('${operation.snake}_box');
@@ -212,7 +257,7 @@ ${implementationAnnotation}class ${feature.pascal}LocalDataSourceImpl implements
 
     final file = File(path);
     if (!file.existsSync()) {
-      _write(path, _createDataModule(importLine, snippet, operation, dataPath));
+      _write(path, _createDataModule(importLine, snippet, isVertical));
       return;
     }
 
@@ -233,8 +278,7 @@ ${implementationAnnotation}class ${feature.pascal}LocalDataSourceImpl implements
   String _createDataModule(
     String featureImport,
     String boxSnippet,
-    NameCases operation,
-    String dataPath,
+    bool isVertical,
   ) {
     final imports = <String>[
       "import 'package:injectable/injectable.dart';",
@@ -247,7 +291,9 @@ ${implementationAnnotation}class ${feature.pascal}LocalDataSourceImpl implements
         "import 'package:path_provider/path_provider.dart';",
       featureImport,
       if (config.localStorage == LocalStorage.objectbox)
-        "import 'objectbox.g.dart';",
+        isVertical
+            ? "import '../../objectbox.g.dart';"
+            : "import 'objectbox.g.dart';",
     ];
     final dio = config.network == NetworkClient.dio
         ? '''
@@ -301,8 +347,7 @@ $dio$init$boxSnippet
     final imports = <String>[
       "import '../entities/${operation.snake}_entity.dart';",
       if (config.useEitherFailure) "import 'package:dartz/dartz.dart';",
-      if (config.useEitherFailure)
-        "import '${_packageRootImport(domainPath, 'failures/failure.dart')}';",
+      if (config.useEitherFailure) "import '${_failureImport(domainPath)}';",
     ];
     final methods = _repositoryMethodNames(
       operation,
@@ -340,8 +385,7 @@ abstract interface class ${feature.pascal}Repository {$methods}
       "import '${_packageImport(domainPath, 'entities/${operation.snake}_entity.dart')}';",
       "import '${_packageImport(domainPath, 'repositories/${feature.snake}_repository.dart')}';",
       if (config.useEitherFailure) "import 'package:dartz/dartz.dart';",
-      if (config.useEitherFailure)
-        "import '${_packageRootImport(domainPath, 'failures/failure.dart')}';",
+      if (config.useEitherFailure) "import '${_failureImport(domainPath)}';",
       if (kind.includesRemote)
         "import '../mappers/${operation.snake}_mapper.dart';",
       if (kind == OperationKind.local)
@@ -523,6 +567,13 @@ ${_wrapReturn('final box = await _localDataSource.$sourceMethod();', 'box.toEnti
     return 'Future<$valueType>';
   }
 
+  String _failureImport(String domainPath) {
+    if (config.structure == ProjectStructure.verticalPackages) {
+      return 'package:${_packageName(config.paths.core)}/core.dart';
+    }
+    return _packageRootImport(domainPath, 'failures/failure.dart');
+  }
+
   String _remoteMethodName(NameCases operation, OperationKind kind) {
     if (kind != OperationKind.cached) return operation.camel;
     return 'sync${_cachedSubject(operation)}';
@@ -653,9 +704,11 @@ String _packageRoot(String libPath) {
   return p.joinAll(parts.take(libIndex));
 }
 
-String _featureNameFromDataPath(String dataPath) {
-  final parts = p.split(p.normalize(dataPath));
-  return parts.isEmpty ? 'feature' : parts.last;
+String _packageName(String libPath) {
+  final parts = p.split(p.normalize(libPath));
+  final libIndex = parts.indexOf('lib');
+  if (libIndex > 0) return parts[libIndex - 1];
+  return p.basename(libPath);
 }
 
 String _packageRootImport(String basePath, String path) {

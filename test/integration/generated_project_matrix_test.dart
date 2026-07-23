@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -35,8 +36,14 @@ Future<void> _runScenario(_Scenario scenario) async {
     await File(
       p.join(project.path, 'clean_architect.yaml'),
     ).writeAsString(scenario.yaml);
+    final generationCommands = scenario.vertical
+        ? <List<String>>[
+            ['create', 'architecture', '--flutter-create', '--platforms=web'],
+            ..._generationCommands.skip(1),
+          ]
+        : _generationCommands;
 
-    for (final arguments in _generationCommands) {
+    for (final arguments in generationCommands) {
       await _run(
         Platform.resolvedExecutable,
         [
@@ -50,7 +57,7 @@ Future<void> _runScenario(_Scenario scenario) async {
     }
 
     final beforeRerun = _sourceSnapshot(project);
-    for (final arguments in _generationCommands) {
+    for (final arguments in generationCommands) {
       await _run(
         Platform.resolvedExecutable,
         [
@@ -68,7 +75,8 @@ Future<void> _runScenario(_Scenario scenario) async {
       reason: 'Generation commands changed files when rerun.',
     );
 
-    for (final package in _packages) {
+    final packages = _packageDirectories(project, scenario);
+    for (final package in packages) {
       final directory = p.join(project.path, package);
       final usesFlutter = _usesFlutter(directory);
       await _run(
@@ -79,7 +87,7 @@ Future<void> _runScenario(_Scenario scenario) async {
       );
     }
 
-    for (final package in _packages) {
+    for (final package in packages) {
       final directory = p.join(project.path, package);
       if (!_hasBuildRunner(directory)) continue;
       await _run(
@@ -90,7 +98,7 @@ Future<void> _runScenario(_Scenario scenario) async {
       );
     }
 
-    for (final package in _packages) {
+    for (final package in packages) {
       final directory = p.join(project.path, package);
       final usesFlutter = _usesFlutter(directory);
       await _run(
@@ -98,6 +106,22 @@ Future<void> _runScenario(_Scenario scenario) async {
         ['analyze'],
         workingDirectory: directory,
         label: '$package: analyze',
+      );
+    }
+
+    if (scenario.vertical) {
+      final appDirectory = p.join(project.path, 'app');
+      await _run(
+        'flutter',
+        const ['test'],
+        workingDirectory: appDirectory,
+        label: 'app: flutter test',
+      );
+      await _run(
+        'flutter',
+        const ['build', 'web'],
+        workingDirectory: appDirectory,
+        label: 'app: flutter build web',
       );
     }
 
@@ -193,7 +217,7 @@ Map<String, ({String content, int modified})> _sourceSnapshot(
   return {
     for (final file in files)
       p.relative(file.path, from: project.path): (
-        content: file.readAsStringSync(),
+        content: base64Encode(file.readAsBytesSync()),
         modified: file.lastModifiedSync().microsecondsSinceEpoch,
       ),
   };
@@ -213,6 +237,26 @@ bool _hasBuildRunner(String packageDirectory) {
   return pubspec.contains('build_runner:');
 }
 
+List<String> _packageDirectories(Directory project, _Scenario scenario) {
+  if (!scenario.vertical) return _packages;
+
+  final packages = <String>['app', p.join('packages', 'core')];
+  final features = Directory(p.join(project.path, 'packages', 'features'));
+  final featurePackages =
+      features
+          .listSync()
+          .whereType<Directory>()
+          .where(
+            (directory) =>
+                File(p.join(directory.path, 'pubspec.yaml')).existsSync(),
+          )
+          .map((directory) => p.relative(directory.path, from: project.path))
+          .toList(growable: false)
+        ..sort();
+  packages.addAll(featurePackages);
+  return packages;
+}
+
 const _packages = ['domain', 'data', 'di', 'presentation'];
 
 const _generationCommands = <List<String>>[
@@ -227,10 +271,15 @@ const _generationCommands = <List<String>>[
 ];
 
 class _Scenario {
-  const _Scenario({required this.name, required this.yaml});
+  const _Scenario({
+    required this.name,
+    required this.yaml,
+    this.vertical = false,
+  });
 
   final String name;
   final String yaml;
+  final bool vertical;
 }
 
 const _scenarios = <_Scenario>[
@@ -400,6 +449,30 @@ clean_architect:
     data: data/lib/features
     presentation: presentation/lib
     di: di/lib
+''',
+  ),
+  _Scenario(
+    name: 'vertical_bloc_injectable_hive_either',
+    vertical: true,
+    yaml: '''
+clean_architect:
+  structure: vertical_packages
+  state_management: bloc
+  network: dio
+  local_storage: hive
+  dependency_injection: injectable
+  use_asset_generator: false
+  use_either_failure: true
+  flutter:
+    create_presentation: false
+    platforms: [android, ios]
+  models:
+    use_freezed: true
+    use_json_serializable: true
+  paths:
+    app: app/lib
+    core: packages/core/lib
+    features: packages/features
 ''',
   ),
 ];

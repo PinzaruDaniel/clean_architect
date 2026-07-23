@@ -112,7 +112,7 @@ This creates `clean_architect.yaml`:
 ```yaml
 clean_architect:
   config_version: 1
-  structure: layered_packages # layered_packages or feature_first
+  structure: layered_packages # layered_packages, feature_first, or vertical_packages
   state_management: getx # getx, bloc, provider, or none
   network: dio # dio or abstract
   local_storage: secure_storage # secure_storage, shared_preferences, hive, objectbox, or abstract
@@ -132,6 +132,9 @@ clean_architect:
     data: data/lib/features
     presentation: presentation/lib
     di: di/lib
+    app: app/lib
+    core: packages/core/lib
+    features: packages/features
 ```
 <!-- END GENERATED:default-config -->
 
@@ -140,14 +143,14 @@ clean_architect:
 | Key | Values | Default | What it controls |
 | --- | --- | --- | --- |
 | `config_version` | positive integer | `1` | Configuration schema version used for future migrations. |
-| `structure` | `layered_packages`, `feature_first` | `layered_packages` | How feature paths are resolved from the configured layer paths. |
+| `structure` | `layered_packages`, `feature_first`, `vertical_packages` | `layered_packages` | How feature paths and package boundaries are resolved. |
 | `state_management` | `getx`, `bloc`, `provider`, `none` | `getx` | Presentation controller/page style. |
 | `network` | `dio`, `abstract` | `dio` | Remote data source style and generated data dependencies. |
 | `local_storage` | `secure_storage`, `shared_preferences`, `hive`, `objectbox`, `abstract` | `secure_storage` | Local auth credential storage style and generated storage dependencies. |
 | `dependency_injection` | `manual`, `injectable` | `manual` | Manual DI builder files or injectable/get_it setup files and annotations. |
 | `use_asset_generator` | `true`, `false` | `true` | Whether presentation gets `asset_generator_kit.yaml` and the asset generator dependency. |
 | `use_either_failure` | `true`, `false` | `false` | Whether generated repositories, repository implementations, and use cases return `Future<Either<Failure, T>>`. |
-| `flutter.create_presentation` | `true`, `false` | `false` | Whether to run `flutter create .` automatically inside the generated presentation package. |
+| `flutter.create_presentation` | `true`, `false` | `false` | Whether to run `flutter create .` inside presentation, or inside app for `vertical_packages`. |
 | `flutter.platforms` | list or comma-separated text | `android`, `ios` | Platforms passed to `flutter create . --platforms=...`. |
 | `models.use_freezed` | `true`, `false` | `true` | Whether entities/DTOs use Freezed. |
 | `models.use_json_serializable` | `true`, `false` | `true` | Whether DTO JSON methods use `json_serializable`; `false` uses manual serialization. |
@@ -155,6 +158,9 @@ clean_architect:
 | `paths.data` | public path below `lib` | `data/lib/features` | Data layer feature root. |
 | `paths.presentation` | public path below `lib` | `presentation/lib` | Presentation layer root. |
 | `paths.di` | public path below `lib` | `di/lib` | Dependency injection layer root. |
+| `paths.app` | public path below `lib` | `app/lib` | Runnable Flutter app root used by `vertical_packages`. |
+| `paths.core` | public path below `lib` | `packages/core/lib` | Shared core package used by `vertical_packages`. |
+| `paths.features` | relative package-parent path | `packages/features` | Parent directory for vertical feature packages. |
 
 Use `abstract` when you want the source boundaries without a concrete local storage package.
 
@@ -162,7 +168,8 @@ CLI overrides are intentionally small and only affect the current command. They 
 
 ## Generated Project Shape
 
-The default architecture is a multi-package Flutter/Dart workspace shape:
+The default `layered_packages` architecture is a multi-package Flutter/Dart
+workspace shape:
 
 ```txt
 my_app/
@@ -239,7 +246,10 @@ clean_architect:
       - web
 ```
 
-When enabled, the CLI runs `flutter create . --platforms=<platforms>` from the generated `presentation/` package root after writing the architecture files. `--dry-run` prints the command without executing it. `--skip-presentation` disables this step for the current command.
+When enabled, the CLI runs `flutter create . --platforms=<platforms>` from the
+generated `presentation/` package root, or from `app/` in `vertical_packages`
+mode. `--dry-run` prints the command without executing it.
+`--skip-presentation` disables this step for the current command.
 
 Run `dart pub get` in the other layer packages as needed.
 
@@ -420,7 +430,11 @@ clean_architect:
       - ios
 ```
 
-This only runs for commands that generate presentation structure: `create architecture`, `create base`, `create auth`, and `create feature <name>`. It is skipped for operation commands, `create usecase`, `create repository`, and commands using `--skip-presentation`.
+This runs for commands that generate presentation structure: `create architecture`,
+`create base`, `create auth`, and `create feature <name>`. It is skipped for
+operation commands, `create usecase`, `create repository`, and commands using
+`--skip-presentation`. In `vertical_packages`, Flutter scaffolding is created in
+the configured app package.
 
 ## Structure Modes
 
@@ -488,6 +502,129 @@ data/lib/features/<feature>/...
 presentation/lib/features/<feature>/pages/...
 presentation/lib/features/<feature>/controllers/...
 di/lib/features/<feature>/...
+```
+
+### Vertical Feature Packages
+
+Use `vertical_packages` when features should be independent packages that own
+all of their architecture layers:
+
+```yaml
+clean_architect:
+  config_version: 1
+  structure: vertical_packages
+  state_management: bloc
+  network: dio
+  local_storage: hive
+  dependency_injection: injectable
+  use_asset_generator: false
+  use_either_failure: true
+  flutter:
+    create_presentation: true
+    platforms: [android, ios, web]
+  models:
+    use_freezed: true
+    use_json_serializable: true
+  paths:
+    app: app/lib
+    core: packages/core/lib
+    features: packages/features
+```
+
+Then run:
+
+```sh
+clean_architect create architecture
+clean_architect create auth
+clean_architect create feature orders
+```
+
+The result is a runnable app shell, a stable shared core, and one package per
+feature:
+
+```txt
+app/
+  pubspec.yaml
+  assets/
+    icons/
+    images/
+  lib/
+    main.dart
+    app.dart
+    constants/
+    controllers/
+    di/
+    pages/
+    routing/
+    theme/
+    utils/
+    widgets/
+  test/
+
+packages/
+  core/
+    pubspec.yaml
+    lib/
+      core.dart
+      src/
+        errors/
+        failures/
+        logging/
+        usecases/
+
+  features/
+    auth/
+      pubspec.yaml
+      lib/
+        auth.dart
+        src/
+          domain/
+            entities/
+            repositories/
+            usecases/
+          data/
+            remote/
+              models/
+            local/
+              models/
+            mappers/
+            repositories/
+          presentation/
+            controllers/
+            pages/
+          di/
+```
+
+Every feature package has one `pubspec.yaml`, so its domain, data,
+presentation, and DI code evolve together without cross-feature imports. The
+app manifest is updated with an idempotent path dependency whenever auth, a
+generic feature, or a standalone repository package is created. Injectable
+configuration and Hive/ObjectBox providers live in each feature's
+`lib/src/di/` folder.
+
+Each package also gets a public barrel, such as `orders/lib/orders.dart`, which
+exports its stable entities, repository contract, use cases, page, controller,
+and DI entry point. Consumers import only the package API:
+
+```dart
+import 'package:orders/orders.dart';
+```
+
+Operation commands extend this barrel when they add new entities and use cases.
+
+The generated `ARCHITECTURE.md` records these dependency rules:
+
+1. The app may depend on core and feature packages.
+2. A feature owns its domain, data, presentation, and DI code.
+3. Features may depend on core but must not import one another.
+4. Core must not depend on the app or any feature.
+
+With Flutter creation enabled, the project is immediately runnable:
+
+```sh
+cd app
+flutter pub get
+flutter run
 ```
 
 ## `create architecture`
@@ -716,6 +853,20 @@ cd ../data
 dart run build_runner build
 ```
 
+In `vertical_packages`, each feature has one injector and data module:
+
+```txt
+packages/features/orders/lib/src/di/injector.dart
+packages/features/orders/lib/src/di/data_module.dart
+```
+
+Run build runner from that feature package:
+
+```sh
+cd packages/features/orders
+dart run build_runner build --delete-conflicting-outputs
+```
+
 ## Either / Failure Return Type
 
 ```yaml
@@ -734,7 +885,10 @@ instead of:
 Future<T>
 ```
 
-The generator also creates `domain/lib/failures/failure.dart` where needed and adds `dartz` to generated layer pubspecs. You can override the value for one command with `--use-either-failure` or `--no-use-either-failure`.
+The generator also creates `domain/lib/failures/failure.dart` where needed and
+adds `dartz` to generated layer pubspecs. Vertical features reuse the shared
+`Failure` from `packages/core`. You can override the value for one command with
+`--use-either-failure` or `--no-use-either-failure`.
 
 ## Model Modes
 
@@ -963,6 +1117,7 @@ clean_architect doctor
 - The active Dart and Flutter versions satisfy the generated package constraints.
 - `build_runner` is declared and resolved in every package that needs it.
 - Every referenced generated `.g.dart` file exists.
+- Vertical app, core, and every discovered feature package are checked.
 
 A healthy project exits with code `0`. Failed validation exits with code `1`, so
 `clean_architect doctor` can be used directly in CI.
@@ -981,6 +1136,7 @@ then runs dependency resolution, code generation, analysis in every layer, and t
 | `either_enabled` | Layered packages with `Either<Failure, T>` returns |
 | `shared_preferences_json_only_custom_paths` | Shared preferences, JSON-only models, and custom public layer paths |
 | `freezed_without_json` | Freezed-only models, Injectable, and manual JSON methods |
+| `vertical_bloc_injectable_hive_either` | Vertical feature packages, runnable app/core packages, Bloc, Injectable, Hive CE, and Either |
 
 Normal `dart test` runs skip these expensive cases. Run the full matrix with:
 
@@ -1004,7 +1160,8 @@ Every scenario creates the architecture, auth, an `orders` feature, standalone
 use case and repository files, and all three operation types. It reruns every
 generation command without allowing any file changes, then resolves dependencies,
 runs builders and analysis, and requires `clean_architect doctor` to pass. GitHub
-Actions runs each scenario as a separate matrix job.
+Actions runs each scenario as a separate matrix job. The vertical scenario also
+generates a real Flutter web scaffold, runs its widget tests, and builds the app.
 
 ## 1.0 Stability Contract
 

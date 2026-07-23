@@ -7,6 +7,8 @@ import '../generator.dart';
 
 List<GeneratedFile> authTemplates(TemplateContext context) {
   final files = <GeneratedFile>[
+    if (context.config.structure == ProjectStructure.verticalPackages)
+      _publicLibrary(context),
     ..._domain(context),
     ..._data(context),
     _di(context),
@@ -17,6 +19,37 @@ List<GeneratedFile> authTemplates(TemplateContext context) {
   }
 
   return files;
+}
+
+GeneratedFile _publicLibrary(TemplateContext context) {
+  final exports = <String>[
+    "export 'src/domain/entities/auth_credentials_entity.dart';",
+    "export 'src/domain/entities/auth_token_entity.dart';",
+    "export 'src/domain/repositories/auth_repository.dart';",
+    "export 'src/domain/usecases/clear_auth_credentials_use_case.dart';",
+    "export 'src/domain/usecases/get_auth_credentials_use_case.dart';",
+    "export 'src/domain/usecases/login_use_case.dart';",
+    "export 'src/domain/usecases/logout_use_case.dart';",
+    "export 'src/domain/usecases/save_auth_credentials_use_case.dart';",
+    if (!context.skipPresentation)
+      "export 'src/presentation/controllers/auth_controller.dart';",
+    if (!context.skipPresentation)
+      "export 'src/presentation/pages/login_page.dart';",
+    if (context.config.dependencyInjection == DependencyInjection.injectable)
+      "export 'src/di/injector.dart';"
+    else
+      "export 'src/di/auth_di.dart';",
+  ];
+  return GeneratedFile(
+    path: p.join(_packageRoot(context.paths.domain), 'lib', 'auth.dart'),
+    content:
+        '''
+/// Public API for the Auth feature.
+library;
+
+${exports.join('\n')}
+''',
+  );
 }
 
 List<GeneratedFile> _domain(TemplateContext context) {
@@ -1320,6 +1353,13 @@ String _domainImport(TemplateContext context, String path) {
 
 String _dataImport(TemplateContext context, String path) {
   return _packageImport(context.paths.data, path);
+}
+
+String _packageRoot(String libPath) {
+  final parts = p.split(p.normalize(libPath));
+  final libIndex = parts.indexOf('lib');
+  if (libIndex == -1) return libPath;
+  return p.joinAll(parts.take(libIndex));
 }
 
 String _packageImport(String basePath, String path) {

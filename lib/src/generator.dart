@@ -116,8 +116,36 @@ class ${useCaseCases.pascal}UseCase {
   List<GeneratedFile> repository(String feature) {
     final cases = NameCases(feature);
     final paths = _paths.resolve(cases.snake);
+    final context = TemplateContext(
+      config: config,
+      cases: cases,
+      paths: paths,
+      skipPresentation: false,
+    );
 
     return [
+      if (config.structure == ProjectStructure.verticalPackages)
+        ...packageTemplates(
+          context,
+          includePresentation: true,
+          includeDataModule: false,
+        ),
+      if (config.structure == ProjectStructure.verticalPackages)
+        GeneratedFile(
+          path: p.join(
+            config.paths.features,
+            cases.snake,
+            'lib',
+            '${cases.snake}.dart',
+          ),
+          content:
+              '''
+/// Public API for the ${cases.title} feature.
+library;
+
+export 'src/domain/repositories/${cases.snake}_repository.dart';
+''',
+        ),
       GeneratedFile(
         path: p.join(
           paths.domain,

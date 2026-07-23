@@ -1,3 +1,16 @@
+## 1.1.0
+
+- Added `vertical_packages`, which generates a runnable Flutter app, a shared
+  core package, and self-contained feature packages with internal domain, data,
+  presentation, and DI layers.
+- Added configurable `paths.app`, `paths.core`, and `paths.features` roots.
+- Added idempotent app path-dependency updates and feature-local Injectable,
+  Dio, Hive, ObjectBox, and operation-module wiring.
+- Added public feature barrels that expose stable domain, presentation, and DI
+  entry points and grow idempotently with operation commands.
+- Added vertical package validation to doctor and a resolving, generated,
+  analyzed integration-matrix scenario.
+
 ## 1.0.0
 
 - Promoted the frozen CLI, configuration schema, generated paths, and public Dart API to the stable 1.0 contract.
