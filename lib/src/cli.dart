@@ -398,7 +398,6 @@ class CleanArchitectCli {
     final featureName = switch (args.first) {
       'auth' => 'auth',
       'feature' when args.length >= 2 => args[1],
-      'architecture' || 'base' => 'base_feature',
       _ => null,
     };
     if (featureName == null || featureName.isEmpty) return null;

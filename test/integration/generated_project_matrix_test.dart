@@ -49,6 +49,25 @@ Future<void> _runScenario(_Scenario scenario) async {
       );
     }
 
+    final beforeRerun = _sourceSnapshot(project);
+    for (final arguments in _generationCommands) {
+      await _run(
+        Platform.resolvedExecutable,
+        [
+          '--packages=${p.join(repository.path, '.dart_tool', 'package_config.json')}',
+          p.join(repository.path, 'bin', 'clean_architect.dart'),
+          ...arguments,
+        ],
+        workingDirectory: project.path,
+        label: 'rerun clean_architect command',
+      );
+    }
+    expect(
+      _sourceSnapshot(project),
+      beforeRerun,
+      reason: 'Generation commands changed files when rerun.',
+    );
+
     for (final package in _packages) {
       final directory = p.join(project.path, package);
       final usesFlutter = _usesFlutter(directory);
@@ -165,6 +184,21 @@ $capturedStderr
 ''');
 }
 
+Map<String, ({String content, int modified})> _sourceSnapshot(
+  Directory project,
+) {
+  final files = project.listSync(recursive: true).whereType<File>().toList()
+    ..sort((left, right) => left.path.compareTo(right.path));
+
+  return {
+    for (final file in files)
+      p.relative(file.path, from: project.path): (
+        content: file.readAsStringSync(),
+        modified: file.lastModifiedSync().microsecondsSinceEpoch,
+      ),
+  };
+}
+
 bool _usesFlutter(String packageDirectory) {
   final pubspec = File(
     p.join(packageDirectory, 'pubspec.yaml'),
@@ -185,6 +219,8 @@ const _generationCommands = <List<String>>[
   ['create', 'architecture', '--no-flutter-create'],
   ['create', 'auth', '--no-flutter-create'],
   ['create', 'feature', 'orders', '--no-flutter-create'],
+  ['create', 'usecase', 'refreshSession', '--feature', 'orders'],
+  ['create', 'repository', 'billing'],
   ['create', 'remote-function', 'fetchReceipt', '--feature', 'orders'],
   ['create', 'local-function', 'readDraft', '--feature', 'orders'],
   ['create', 'cached-function', 'syncCatalog', '--feature', 'orders'],
@@ -207,7 +243,7 @@ clean_architect:
   network: dio
   local_storage: secure_storage
   dependency_injection: manual
-  use_asset_generator: false
+  use_asset_generator: true
   use_either_failure: false
   flutter:
     create_presentation: false
@@ -311,6 +347,54 @@ clean_architect:
   models:
     use_freezed: true
     use_json_serializable: true
+  paths:
+    domain: domain/lib
+    data: data/lib/features
+    presentation: presentation/lib
+    di: di/lib
+''',
+  ),
+  _Scenario(
+    name: 'shared_preferences_json_only_custom_paths',
+    yaml: '''
+clean_architect:
+  structure: layered_packages
+  state_management: getx
+  network: abstract
+  local_storage: shared_preferences
+  dependency_injection: manual
+  use_asset_generator: false
+  use_either_failure: false
+  flutter:
+    create_presentation: false
+    platforms: [web, linux]
+  models:
+    use_freezed: false
+    use_json_serializable: true
+  paths:
+    domain: domain/lib/modules
+    data: data/lib/modules
+    presentation: presentation/lib/app
+    di: di/lib/modules
+''',
+  ),
+  _Scenario(
+    name: 'freezed_without_json',
+    yaml: '''
+clean_architect:
+  structure: feature_first
+  state_management: none
+  network: abstract
+  local_storage: secure_storage
+  dependency_injection: injectable
+  use_asset_generator: false
+  use_either_failure: false
+  flutter:
+    create_presentation: false
+    platforms: [macos, windows]
+  models:
+    use_freezed: true
+    use_json_serializable: false
   paths:
     domain: domain/lib
     data: data/lib/features

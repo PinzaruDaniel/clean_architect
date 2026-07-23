@@ -396,8 +396,7 @@ String _dataPubspec(TemplateContext context) {
     dependencies.add('  freezed_annotation: $_freezedAnnotationVersion');
     devDependencies.add('  freezed: $_freezedVersion');
   }
-  if (context.config.models.useJsonSerializable ||
-      context.config.models.useFreezed) {
+  if (context.config.models.useJsonSerializable) {
     dependencies.add('  json_annotation: $_jsonAnnotationVersion');
     devDependencies.add('  json_serializable: $_jsonSerializableVersion');
   }

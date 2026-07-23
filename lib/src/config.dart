@@ -338,6 +338,12 @@ void _validateLayerPath(String label, String value) {
       '$label path must point inside a package lib directory: "$value".',
     );
   }
+  if (libIndex + 1 < parts.length && parts[libIndex + 1] == 'src') {
+    throw FormatException(
+      '$label path must not use the cross-package reserved lib/src directory: '
+      '"$value". Use a public directory below lib instead.',
+    );
+  }
 }
 
 String _packageRoot(String path) {

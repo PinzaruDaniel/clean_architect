@@ -301,7 +301,8 @@ class AuthCredentialsEntity {
 
 String _authTokenDto(CleanArchitectConfig config) {
   if (config.models.useFreezed) {
-    return '''
+    if (config.models.useJsonSerializable) {
+      return '''
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'auth_token_dto.freezed.dart';
@@ -317,6 +318,42 @@ abstract class AuthTokenDto with _\$AuthTokenDto {
 
   factory AuthTokenDto.fromJson(Map<String, dynamic> json) =>
       _\$AuthTokenDtoFromJson(json);
+}
+''';
+    }
+
+    return '''
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'auth_token_dto.freezed.dart';
+
+@freezed
+abstract class AuthTokenDto with _\$AuthTokenDto {
+  const AuthTokenDto._();
+
+  const factory AuthTokenDto({
+    required String accessToken,
+    String? refreshToken,
+    DateTime? expiresAt,
+  }) = _AuthTokenDto;
+
+  factory AuthTokenDto.fromJson(Map<String, dynamic> json) {
+    return AuthTokenDto(
+      accessToken: json['access_token'] as String,
+      refreshToken: json['refresh_token'] as String?,
+      expiresAt: json['expires_at'] == null
+          ? null
+          : DateTime.parse(json['expires_at'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'access_token': accessToken,
+      'refresh_token': refreshToken,
+      'expires_at': expiresAt?.toIso8601String(),
+    };
+  }
 }
 ''';
   }
@@ -386,7 +423,8 @@ class AuthTokenDto {
 
 String _loginRequestDto(CleanArchitectConfig config) {
   if (config.models.useFreezed) {
-    return '''
+    if (config.models.useJsonSerializable) {
+      return '''
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'login_request_dto.freezed.dart';
@@ -401,6 +439,37 @@ abstract class LoginRequestDto with _\$LoginRequestDto {
 
   factory LoginRequestDto.fromJson(Map<String, dynamic> json) =>
       _\$LoginRequestDtoFromJson(json);
+}
+''';
+    }
+
+    return '''
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'login_request_dto.freezed.dart';
+
+@freezed
+abstract class LoginRequestDto with _\$LoginRequestDto {
+  const LoginRequestDto._();
+
+  const factory LoginRequestDto({
+    required String username,
+    required String password,
+  }) = _LoginRequestDto;
+
+  factory LoginRequestDto.fromJson(Map<String, dynamic> json) {
+    return LoginRequestDto(
+      username: json['username'] as String,
+      password: json['password'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'username': username,
+      'password': password,
+    };
+  }
 }
 ''';
   }

@@ -327,7 +327,8 @@ class ${feature.pascal}Entity {
 String _dto(TemplateContext context) {
   final feature = context.cases;
   if (context.config.models.useFreezed) {
-    return '''
+    if (context.config.models.useJsonSerializable) {
+      return '''
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part '${feature.snake}_dto.freezed.dart';
@@ -341,6 +342,30 @@ abstract class ${feature.pascal}Dto with _\$${feature.pascal}Dto {
 
   factory ${feature.pascal}Dto.fromJson(Map<String, dynamic> json) =>
       _\$${feature.pascal}DtoFromJson(json);
+}
+''';
+    }
+
+    return '''
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part '${feature.snake}_dto.freezed.dart';
+
+@freezed
+abstract class ${feature.pascal}Dto with _\$${feature.pascal}Dto {
+  const ${feature.pascal}Dto._();
+
+  const factory ${feature.pascal}Dto({
+    required String id,
+  }) = _${feature.pascal}Dto;
+
+  factory ${feature.pascal}Dto.fromJson(Map<String, dynamic> json) {
+    return ${feature.pascal}Dto(id: json['id'] as String);
+  }
+
+  Map<String, dynamic> toJson() {
+    return {'id': id};
+  }
 }
 ''';
   }

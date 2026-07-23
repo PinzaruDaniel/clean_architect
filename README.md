@@ -108,6 +108,7 @@ clean_architect init
 
 This creates `clean_architect.yaml`:
 
+<!-- BEGIN GENERATED:default-config -->
 ```yaml
 clean_architect:
   config_version: 1
@@ -132,6 +133,7 @@ clean_architect:
     presentation: presentation/lib
     di: di/lib
 ```
+<!-- END GENERATED:default-config -->
 
 ### Configuration Reference
 
@@ -148,11 +150,11 @@ clean_architect:
 | `flutter.create_presentation` | `true`, `false` | `false` | Whether to run `flutter create .` automatically inside the generated presentation package. |
 | `flutter.platforms` | list or comma-separated text | `android`, `ios` | Platforms passed to `flutter create . --platforms=...`. |
 | `models.use_freezed` | `true`, `false` | `true` | Whether entities/DTOs use Freezed. |
-| `models.use_json_serializable` | `true`, `false` | `true` | Whether DTOs include JSON serialization parts/factories. |
-| `paths.domain` | path | `domain/lib` | Domain layer feature root. |
-| `paths.data` | path | `data/lib/features` | Data layer feature root. |
-| `paths.presentation` | path | `presentation/lib` | Presentation layer root. |
-| `paths.di` | path | `di/lib` | Dependency injection layer root. |
+| `models.use_json_serializable` | `true`, `false` | `true` | Whether DTO JSON methods use `json_serializable`; `false` uses manual serialization. |
+| `paths.domain` | public path below `lib` | `domain/lib` | Domain layer feature root. `lib/src` is rejected because layers import each other. |
+| `paths.data` | public path below `lib` | `data/lib/features` | Data layer feature root. |
+| `paths.presentation` | public path below `lib` | `presentation/lib` | Presentation layer root. |
+| `paths.di` | public path below `lib` | `di/lib` | Dependency injection layer root. |
 
 Use `abstract` when you want the source boundaries without a concrete local storage package.
 
@@ -240,6 +242,151 @@ clean_architect:
 When enabled, the CLI runs `flutter create . --platforms=<platforms>` from the generated `presentation/` package root after writing the architecture files. `--dry-run` prints the command without executing it. `--skip-presentation` disables this step for the current command.
 
 Run `dart pub get` in the other layer packages as needed.
+
+## Generated Output Contract
+
+These manifests are generated from the public Dart API and checked against this
+README in the test suite. They are the authoritative file output for the default
+configuration; narrative examples elsewhere describe selected files only.
+
+### Architecture
+
+<!-- BEGIN GENERATED:architecture -->
+```txt
+data/lib/features/base_feature/local/.gitkeep
+data/lib/features/base_feature/local/models/.gitkeep
+data/lib/features/base_feature/mappers/.gitkeep
+data/lib/features/base_feature/remote/.gitkeep
+data/lib/features/base_feature/remote/models/.gitkeep
+data/lib/features/base_feature/repositories/.gitkeep
+data/pubspec.yaml
+di/lib/.gitkeep
+di/pubspec.yaml
+domain/lib/features/base_feature/entities/.gitkeep
+domain/lib/features/base_feature/repositories/.gitkeep
+domain/lib/features/base_feature/usecases/.gitkeep
+domain/pubspec.yaml
+presentation/analysis_options.yaml
+presentation/asset_generator_kit.yaml
+presentation/assets/icons/.gitkeep
+presentation/assets/images/.gitkeep
+presentation/lib/constants/.gitkeep
+presentation/lib/controllers/.gitkeep
+presentation/lib/main.dart
+presentation/lib/pages/.gitkeep
+presentation/lib/utils/.gitkeep
+presentation/lib/widgets/.gitkeep
+presentation/pubspec.yaml
+```
+<!-- END GENERATED:architecture -->
+
+### Auth
+
+<!-- BEGIN GENERATED:auth -->
+```txt
+data/lib/features/auth/local/auth_local_data_source.dart
+data/lib/features/auth/local/models/auth_box.dart
+data/lib/features/auth/mappers/auth_token_mapper.dart
+data/lib/features/auth/remote/auth_remote_data_source.dart
+data/lib/features/auth/remote/models/auth_token_dto.dart
+data/lib/features/auth/remote/models/login_request_dto.dart
+data/lib/features/auth/repositories/auth_repository_impl.dart
+data/pubspec.yaml
+di/lib/auth_di.dart
+di/pubspec.yaml
+domain/lib/features/auth/entities/auth_credentials_entity.dart
+domain/lib/features/auth/entities/auth_token_entity.dart
+domain/lib/features/auth/repositories/auth_repository.dart
+domain/lib/features/auth/usecases/clear_auth_credentials_use_case.dart
+domain/lib/features/auth/usecases/get_auth_credentials_use_case.dart
+domain/lib/features/auth/usecases/login_use_case.dart
+domain/lib/features/auth/usecases/logout_use_case.dart
+domain/lib/features/auth/usecases/save_auth_credentials_use_case.dart
+domain/pubspec.yaml
+presentation/analysis_options.yaml
+presentation/asset_generator_kit.yaml
+presentation/assets/icons/.gitkeep
+presentation/assets/images/.gitkeep
+presentation/lib/constants/.gitkeep
+presentation/lib/controllers/.gitkeep
+presentation/lib/controllers/auth_controller.dart
+presentation/lib/main.dart
+presentation/lib/pages/.gitkeep
+presentation/lib/pages/login_page.dart
+presentation/lib/utils/.gitkeep
+presentation/lib/widgets/.gitkeep
+presentation/pubspec.yaml
+```
+<!-- END GENERATED:auth -->
+
+### Generic Orders Feature
+
+<!-- BEGIN GENERATED:feature-orders -->
+```txt
+data/lib/features/orders/local/models/orders_box.dart
+data/lib/features/orders/local/orders_local_data_source.dart
+data/lib/features/orders/mappers/orders_mapper.dart
+data/lib/features/orders/remote/models/orders_dto.dart
+data/lib/features/orders/remote/orders_remote_data_source.dart
+data/lib/features/orders/repositories/orders_repository_impl.dart
+data/pubspec.yaml
+di/lib/orders_di.dart
+di/pubspec.yaml
+domain/lib/features/orders/entities/orders_entity.dart
+domain/lib/features/orders/repositories/orders_repository.dart
+domain/lib/features/orders/usecases/get_orders_list_use_case.dart
+domain/pubspec.yaml
+presentation/analysis_options.yaml
+presentation/asset_generator_kit.yaml
+presentation/assets/icons/.gitkeep
+presentation/assets/images/.gitkeep
+presentation/lib/constants/.gitkeep
+presentation/lib/controllers/.gitkeep
+presentation/lib/controllers/orders_controller.dart
+presentation/lib/main.dart
+presentation/lib/pages/.gitkeep
+presentation/lib/pages/orders_page.dart
+presentation/lib/utils/.gitkeep
+presentation/lib/widgets/.gitkeep
+presentation/pubspec.yaml
+```
+<!-- END GENERATED:feature-orders -->
+
+### Remote Operation
+
+<!-- BEGIN GENERATED:remote-operation -->
+```txt
+data/lib/features/orders/mappers/load_details_mapper.dart
+data/lib/features/orders/remote/models/load_details_dto.dart
+domain/lib/features/orders/entities/load_details_entity.dart
+domain/lib/features/orders/usecases/load_details_use_case.dart
+```
+<!-- END GENERATED:remote-operation -->
+
+### Local Operation
+
+<!-- BEGIN GENERATED:local-operation -->
+```txt
+data/lib/features/orders/local/models/read_draft_box.dart
+data/lib/features/orders/mappers/read_draft_mapper.dart
+domain/lib/features/orders/entities/read_draft_entity.dart
+domain/lib/features/orders/usecases/read_draft_use_case.dart
+```
+<!-- END GENERATED:local-operation -->
+
+### Cached Operation
+
+<!-- BEGIN GENERATED:cached-operation -->
+```txt
+data/lib/features/orders/local/models/sync_details_box.dart
+data/lib/features/orders/mappers/sync_details_box_mapper.dart
+data/lib/features/orders/mappers/sync_details_mapper.dart
+data/lib/features/orders/remote/models/sync_details_dto.dart
+domain/lib/features/orders/entities/sync_details_entity.dart
+domain/lib/features/orders/usecases/stream_details_use_case.dart
+domain/lib/features/orders/usecases/sync_details_use_case.dart
+```
+<!-- END GENERATED:cached-operation -->
 
 ## Flutter Presentation Bootstrap
 
@@ -832,6 +979,8 @@ then runs dependency resolution, code generation, analysis in every layer, and t
 | `provider_injectable_objectbox` | Layered packages, Provider, Injectable, ObjectBox |
 | `none_abstract_plain_feature_first` | Feature first, no state package, abstract sources, plain Dart models |
 | `either_enabled` | Layered packages with `Either<Failure, T>` returns |
+| `shared_preferences_json_only_custom_paths` | Shared preferences, JSON-only models, and custom public layer paths |
+| `freezed_without_json` | Freezed-only models, Injectable, and manual JSON methods |
 
 Normal `dart test` runs skip these expensive cases. Run the full matrix with:
 
@@ -851,15 +1000,17 @@ Keep generated projects after success for manual inspection:
 CLEAN_ARCHITECT_INTEGRATION=all CLEAN_ARCHITECT_KEEP_INTEGRATION_PROJECTS=true dart test test/integration/generated_project_matrix_test.dart
 ```
 
-Every scenario creates the architecture, auth, an `orders` feature, and remote,
-local, and cached operations, then requires `clean_architect doctor` to pass. GitHub Actions runs each scenario as a separate
-matrix job.
+Every scenario creates the architecture, auth, an `orders` feature, standalone
+use case and repository files, and all three operation types. It reruns every
+generation command without allowing any file changes, then resolves dependencies,
+runs builders and analysis, and requires `clean_architect doctor` to pass. GitHub
+Actions runs each scenario as a separate matrix job.
 
-## 0.9 Release Candidate Contract
+## 1.0 Stability Contract
 
-Version `0.9.0` freezes the interface planned for 1.0. Existing commands,
-options, configuration keys, generated package roots, and exported Dart APIs
-will not be removed or renamed before 1.0.
+Version `1.0.0` establishes the stable interface. Existing commands, options,
+configuration keys, generated package roots, and exported Dart APIs follow the
+compatibility and deprecation policy below.
 
 ### Frozen CLI surface
 
@@ -938,6 +1089,7 @@ dart format lib test bin
 dart analyze
 dart test
 UPDATE_GOLDENS=true dart test test/golden_generation_test.dart
+UPDATE_README_CONTRACTS=true dart test test/readme_contract_test.dart
 dart pub publish --dry-run
 ```
 

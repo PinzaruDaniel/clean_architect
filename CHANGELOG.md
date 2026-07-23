@@ -1,3 +1,15 @@
+## 1.0.0
+
+- Promoted the frozen CLI, configuration schema, generated paths, and public Dart API to the stable 1.0 contract.
+- Added executable README contracts for the default YAML and architecture, auth, feature, and operation file manifests.
+- Added byte-for-byte rerun checks for every generation command and compatibility alias.
+- Expanded real-project validation to shared preferences, JSON-only models, Freezed-only models, custom public paths, standalone use case and repository commands, and the default asset generator setting.
+- Made Freezed and json_serializable independently configurable, including manual JSON methods for Freezed-only DTOs and generated JSON support for operation DTOs.
+- Rejected cross-package `lib/src` layer roots, which produce Dart implementation-import violations.
+- Required all generated-project scenarios to rerun unchanged before dependency resolution, code generation, analysis, and doctor checks.
+- Fixed architecture reruns adding a nonexistent `BaseFeatureBox` provider to injectable Hive/ObjectBox data modules.
+- Added clean-tree, warning-free pub.dev validation as the final release gate.
+
 ## 0.9.0
 
 - Froze the supported CLI commands, compatibility aliases, configuration keys, default paths, and public Dart API for the 1.0 release line.

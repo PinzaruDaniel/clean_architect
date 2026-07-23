@@ -37,6 +37,8 @@ jobs:
           - provider_injectable_objectbox
           - none_abstract_plain_feature_first
           - either_enabled
+          - shared_preferences_json_only_custom_paths
+          - freezed_without_json
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2

@@ -110,14 +110,9 @@ class ${operation.pascal}Entity {
 }
 
 GeneratedFile _dto(TemplateContext context, NameCases operation) {
-  return GeneratedFile(
-    path: p.join(
-      context.paths.data,
-      'remote',
-      'models',
-      '${operation.snake}_dto.dart',
-    ),
-    content: context.config.models.useFreezed
+  late final String content;
+  if (context.config.models.useFreezed) {
+    content = context.config.models.useJsonSerializable
         ? '''
 import 'package:freezed_annotation/freezed_annotation.dart';
 
@@ -135,6 +130,52 @@ abstract class ${operation.pascal}Dto with _\$${operation.pascal}Dto {
 }
 '''
         : '''
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part '${operation.snake}_dto.freezed.dart';
+
+@freezed
+abstract class ${operation.pascal}Dto with _\$${operation.pascal}Dto {
+  const ${operation.pascal}Dto._();
+
+  const factory ${operation.pascal}Dto({
+    required String id,
+  }) = _${operation.pascal}Dto;
+
+  factory ${operation.pascal}Dto.fromJson(Map<String, dynamic> json) {
+    return ${operation.pascal}Dto(id: json['id'] as String);
+  }
+
+  Map<String, dynamic> toJson() {
+    return {'id': id};
+  }
+}
+''';
+  } else if (context.config.models.useJsonSerializable) {
+    content =
+        '''
+import 'package:json_annotation/json_annotation.dart';
+
+part '${operation.snake}_dto.g.dart';
+
+@JsonSerializable()
+class ${operation.pascal}Dto {
+  const ${operation.pascal}Dto({
+    required this.id,
+  });
+
+  factory ${operation.pascal}Dto.fromJson(Map<String, dynamic> json) {
+    return _\$${operation.pascal}DtoFromJson(json);
+  }
+
+  final String id;
+
+  Map<String, dynamic> toJson() => _\$${operation.pascal}DtoToJson(this);
+}
+''';
+  } else {
+    content =
+        '''
 class ${operation.pascal}Dto {
   const ${operation.pascal}Dto({
     required this.id,
@@ -150,7 +191,17 @@ class ${operation.pascal}Dto {
     return {'id': id};
   }
 }
-''',
+''';
+  }
+
+  return GeneratedFile(
+    path: p.join(
+      context.paths.data,
+      'remote',
+      'models',
+      '${operation.snake}_dto.dart',
+    ),
+    content: content,
   );
 }
 

@@ -6,7 +6,7 @@ import 'package:test/test.dart';
 import 'package:yaml/yaml.dart';
 
 void main() {
-  test('the 0.9 public Dart API remains available', () {
+  test('the 1.0 public Dart API remains available', () {
     const generatedFile = GeneratedFile(path: 'sample.dart', content: 'sample');
     const featurePaths = FeaturePaths(
       domain: 'domain',
@@ -17,7 +17,7 @@ void main() {
     const diagnostic = DoctorDiagnostic(DoctorLevel.success, 'healthy');
     const report = DoctorReport([diagnostic]);
 
-    expect(packageVersion, '0.9.0');
+    expect(packageVersion, '1.0.0');
     expect(generatedFile.path, 'sample.dart');
     expect(featurePaths.domain, 'domain');
     expect(report.hasErrors, isFalse);

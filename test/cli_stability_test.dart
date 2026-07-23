@@ -37,7 +37,7 @@ void main() {
     ], directory.path);
 
     expect(version.exitCode, 0);
-    expect(version.stdout, contains('clean_architect 0.9.0'));
+    expect(version.stdout, contains('clean_architect 1.0.0'));
     expect(help.exitCode, 0);
     expect(
       help.stdout,
@@ -119,6 +119,22 @@ clean_architect:
           (error) => error.message,
           'message',
           contains('must not contain ".."'),
+        ),
+      ),
+    );
+
+    invalidPath.writeAsStringSync('''
+clean_architect:
+  paths:
+    domain: domain/lib/src
+''');
+    expect(
+      () => CleanArchitectConfig.fromFile(invalidPath),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          contains('reserved lib/src'),
         ),
       ),
     );
