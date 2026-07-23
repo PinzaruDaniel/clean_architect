@@ -336,6 +336,7 @@ clean_architect:
     yaml: '''
 clean_architect:
   structure: layered_packages
+  data_layout: type_first
   state_management: provider
   network: dio
   local_storage: objectbox
@@ -457,6 +458,7 @@ clean_architect:
     yaml: '''
 clean_architect:
   structure: vertical_packages
+  data_layout: type_first
   state_management: bloc
   network: dio
   local_storage: hive

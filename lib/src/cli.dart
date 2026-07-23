@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 
 import 'case_utils.dart';
 import 'config.dart';
+import 'data_paths.dart';
 import 'file_writer.dart';
 import 'generator.dart';
 import 'generated_file.dart';
@@ -336,6 +337,7 @@ class CleanArchitectCli {
     final overridden = CleanArchitectConfig(
       configVersion: config.configVersion,
       structure: config.structure,
+      dataLayout: config.dataLayout,
       stateManagement:
           _stateOverride(results['state'] as String?) ?? config.stateManagement,
       network:
@@ -408,7 +410,6 @@ class CleanArchitectCli {
     final featureName = switch (args.first) {
       'auth' => 'auth',
       'feature' when args.length >= 2 => args[1],
-      'repository' when args.length >= 2 => args[1],
       _ => null,
     };
     if (featureName == null || featureName.isEmpty) return null;
@@ -425,13 +426,9 @@ class CleanArchitectCli {
     var content = moduleFile.readAsStringSync();
     if (content.contains(' $methodName(')) return null;
 
-    final featureDataPath = p.join(config.paths.data, feature.snake);
-    final boxPath = p.join(
-      featureDataPath,
-      'local',
-      'models',
-      '${feature.snake}_box.dart',
-    );
+    final featureDataPath = PathResolver(config).resolve(feature.snake).data;
+    final dataPaths = DataPaths.resolve(config, featureDataPath);
+    final boxPath = p.join(dataPaths.localModels, '${feature.snake}_box.dart');
     final boxImportPath = p
         .relative(boxPath, from: dataLib)
         .split(p.separator)

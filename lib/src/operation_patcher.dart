@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 
 import 'case_utils.dart';
 import 'config.dart';
+import 'data_paths.dart';
 import 'generated_file.dart';
 import 'operation_kind.dart';
 import 'path_resolver.dart';
@@ -23,17 +24,18 @@ class OperationPatcher {
     final feature = NameCases(featureName);
     final operation = NameCases(operationName);
     final paths = PathResolver(config).resolve(feature.snake);
+    final dataPaths = DataPaths.resolve(config, paths.data);
 
     if (kind.includesRemote) {
-      _patchRemoteSource(paths.data, feature, operation, kind);
+      _patchRemoteSource(dataPaths, feature, operation, kind);
     }
     if (kind.includesLocal) {
-      _patchLocalSource(paths.data, feature, operation, kind);
-      _patchDataModule(paths.data, feature, operation);
+      _patchLocalSource(dataPaths, feature, operation, kind);
+      _patchDataModule(dataPaths, feature, operation);
     }
 
     _patchRepository(paths.domain, feature, operation, kind);
-    _patchRepositoryImpl(paths.data, paths.domain, feature, operation, kind);
+    _patchRepositoryImpl(dataPaths, paths.domain, feature, operation, kind);
     _patchController(
       paths.presentation,
       paths.domain,
@@ -82,17 +84,21 @@ class OperationPatcher {
   }
 
   void _patchRemoteSource(
-    String dataPath,
+    DataPaths dataPaths,
     NameCases feature,
     NameCases operation,
     OperationKind kind,
   ) {
     final path = p.join(
-      dataPath,
-      'remote',
+      dataPaths.remoteDataSources,
       '${feature.snake}_remote_data_source.dart',
     );
-    final importLine = "import 'models/${operation.snake}_dto.dart';";
+    final dtoPath = p.join(
+      dataPaths.remoteModels,
+      '${operation.snake}_dto.dart',
+    );
+    final importLine =
+        "import '${relativeDartImport(fromDirectory: dataPaths.remoteDataSources, targetPath: dtoPath)}';";
     final methodName = _remoteMethodName(operation, kind);
     final annotation = config.network == NetworkClient.dio
         ? "  @GET('/${feature.snake}/${operation.snake}')\n"
@@ -143,17 +149,21 @@ $snippet}
   }
 
   void _patchLocalSource(
-    String dataPath,
+    DataPaths dataPaths,
     NameCases feature,
     NameCases operation,
     OperationKind kind,
   ) {
     final path = p.join(
-      dataPath,
-      'local',
+      dataPaths.localDataSources,
       '${feature.snake}_local_data_source.dart',
     );
-    final importLine = "import 'models/${operation.snake}_box.dart';";
+    final boxPath = p.join(
+      dataPaths.localModels,
+      '${operation.snake}_box.dart',
+    );
+    final importLine =
+        "import '${relativeDartImport(fromDirectory: dataPaths.localDataSources, targetPath: boxPath)}';";
     final methodName = kind == OperationKind.cached
         ? _localMethodName(operation)
         : operation.camel;
@@ -219,7 +229,7 @@ ${implementationAnnotation}class ${feature.pascal}LocalDataSourceImpl implements
   }
 
   void _patchDataModule(
-    String dataPath,
+    DataPaths dataPaths,
     NameCases feature,
     NameCases operation,
   ) {
@@ -231,11 +241,20 @@ ${implementationAnnotation}class ${feature.pascal}LocalDataSourceImpl implements
 
     final isVertical = config.structure == ProjectStructure.verticalPackages;
     final path = isVertical
-        ? p.join(_packageRoot(dataPath), 'lib', 'src', 'di', 'data_module.dart')
-        : p.join(_packageRoot(dataPath), 'lib', 'data_module.dart');
-    final importLine = isVertical
-        ? "import '../data/local/models/${operation.snake}_box.dart';"
-        : "import 'features/${feature.snake}/local/models/${operation.snake}_box.dart';";
+        ? p.join(
+            _packageRoot(dataPaths.root),
+            'lib',
+            'src',
+            'di',
+            'data_module.dart',
+          )
+        : p.join(_packageRoot(dataPaths.root), 'lib', 'data_module.dart');
+    final boxPath = p.join(
+      dataPaths.localModels,
+      '${operation.snake}_box.dart',
+    );
+    final importLine =
+        "import '${relativeDartImport(fromDirectory: p.dirname(path), targetPath: boxPath)}';";
     final methodName = '${operation.camel}Box';
     final boxClass = '${operation.pascal}Box';
     final snippet = config.localStorage == LocalStorage.hive
@@ -369,15 +388,14 @@ abstract interface class ${feature.pascal}Repository {$methods}
   }
 
   void _patchRepositoryImpl(
-    String dataPath,
+    DataPaths dataPaths,
     String domainPath,
     NameCases feature,
     NameCases operation,
     OperationKind kind,
   ) {
     final path = p.join(
-      dataPath,
-      'repositories',
+      dataPaths.repositories,
       '${feature.snake}_repository_impl.dart',
     );
     final returnType = _returnType(operation);
@@ -387,15 +405,15 @@ abstract interface class ${feature.pascal}Repository {$methods}
       if (config.useEitherFailure) "import 'package:dartz/dartz.dart';",
       if (config.useEitherFailure) "import '${_failureImport(domainPath)}';",
       if (kind.includesRemote)
-        "import '../mappers/${operation.snake}_mapper.dart';",
+        "import '${relativeDartImport(fromDirectory: dataPaths.repositories, targetPath: p.join(dataPaths.mappers, '${operation.snake}_mapper.dart'))}';",
       if (kind == OperationKind.local)
-        "import '../mappers/${operation.snake}_mapper.dart';",
+        "import '${relativeDartImport(fromDirectory: dataPaths.repositories, targetPath: p.join(dataPaths.mappers, '${operation.snake}_mapper.dart'))}';",
       if (kind == OperationKind.cached)
-        "import '../mappers/${operation.snake}_box_mapper.dart';",
+        "import '${relativeDartImport(fromDirectory: dataPaths.repositories, targetPath: p.join(dataPaths.mappers, '${operation.snake}_box_mapper.dart'))}';",
       if (kind.includesRemote)
-        "import '../remote/${feature.snake}_remote_data_source.dart';",
+        "import '${relativeDartImport(fromDirectory: dataPaths.repositories, targetPath: p.join(dataPaths.remoteDataSources, '${feature.snake}_remote_data_source.dart'))}';",
       if (kind.includesLocal)
-        "import '../local/${feature.snake}_local_data_source.dart';",
+        "import '${relativeDartImport(fromDirectory: dataPaths.repositories, targetPath: p.join(dataPaths.localDataSources, '${feature.snake}_local_data_source.dart'))}';",
     ];
     final methods = _repositoryImplMethods(operation, kind, returnType);
 

@@ -1,3 +1,12 @@
+## 1.2.0
+
+- Added `data_layout` with backward-compatible `source_first` and new
+  `type_first` modes for organizing models and data sources.
+- Applied the selected data layout consistently to architecture, auth, generic
+  features, operation commands, and Injectable data-module updates.
+- Stopped repository-only generation from registering a storage box that the
+  command does not create.
+
 ## 1.1.0
 
 - Added `vertical_packages`, which generates a runnable Flutter app, a shared

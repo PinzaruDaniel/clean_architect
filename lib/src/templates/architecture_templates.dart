@@ -1,5 +1,6 @@
 import 'package:path/path.dart' as p;
 
+import '../data_paths.dart';
 import '../generated_file.dart';
 import '../generator.dart';
 
@@ -31,30 +32,19 @@ List<GeneratedFile> _domainFolders(TemplateContext context) {
 }
 
 List<GeneratedFile> _dataFolders(TemplateContext context) {
+  final paths = DataPaths.resolve(context.config, context.paths.data);
   return [
+    GeneratedFile(path: p.join(paths.remoteModels, '.gitkeep'), content: ''),
     GeneratedFile(
-      path: p.join(context.paths.data, 'remote', 'models', '.gitkeep'),
+      path: p.join(paths.remoteDataSources, '.gitkeep'),
       content: '',
     ),
+    GeneratedFile(path: p.join(paths.localModels, '.gitkeep'), content: ''),
     GeneratedFile(
-      path: p.join(context.paths.data, 'remote', '.gitkeep'),
+      path: p.join(paths.localDataSources, '.gitkeep'),
       content: '',
     ),
-    GeneratedFile(
-      path: p.join(context.paths.data, 'local', 'models', '.gitkeep'),
-      content: '',
-    ),
-    GeneratedFile(
-      path: p.join(context.paths.data, 'local', '.gitkeep'),
-      content: '',
-    ),
-    GeneratedFile(
-      path: p.join(context.paths.data, 'mappers', '.gitkeep'),
-      content: '',
-    ),
-    GeneratedFile(
-      path: p.join(context.paths.data, 'repositories', '.gitkeep'),
-      content: '',
-    ),
+    GeneratedFile(path: p.join(paths.mappers, '.gitkeep'), content: ''),
+    GeneratedFile(path: p.join(paths.repositories, '.gitkeep'), content: ''),
   ];
 }

@@ -17,7 +17,7 @@ void main() {
     const diagnostic = DoctorDiagnostic(DoctorLevel.success, 'healthy');
     const report = DoctorReport([diagnostic]);
 
-    expect(packageVersion, '1.0.0');
+    expect(packageVersion, '1.1.0');
     expect(generatedFile.path, 'sample.dart');
     expect(featurePaths.domain, 'domain');
     expect(report.hasErrors, isFalse);
@@ -42,6 +42,7 @@ void main() {
     expect(root.keys, [
       'config_version',
       'structure',
+      'data_layout',
       'state_management',
       'network',
       'local_storage',
@@ -75,6 +76,10 @@ void main() {
       'layeredPackages',
       'verticalPackages',
     ]);
+    expect(DataLayout.values.map((value) => value.name), [
+      'sourceFirst',
+      'typeFirst',
+    ]);
     expect(StateManagement.values.map((value) => value.name), [
       'getx',
       'bloc',
@@ -100,6 +105,7 @@ void main() {
 
   test('default and feature-first paths are frozen', () {
     final defaults = CleanArchitectConfig.defaults();
+    expect(defaults.dataLayout, DataLayout.sourceFirst);
     expect(defaults.paths.domain, 'domain/lib');
     expect(defaults.paths.data, 'data/lib/features');
     expect(defaults.paths.presentation, 'presentation/lib');

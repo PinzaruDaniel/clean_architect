@@ -2,6 +2,7 @@ import 'package:path/path.dart' as p;
 
 import '../case_utils.dart';
 import '../config.dart';
+import '../data_paths.dart';
 import '../generated_file.dart';
 import '../generator.dart';
 import '../operation_kind.dart';
@@ -111,6 +112,7 @@ class ${operation.pascal}Entity {
 }
 
 GeneratedFile _dto(TemplateContext context, NameCases operation) {
+  final dataPaths = DataPaths.resolve(context.config, context.paths.data);
   late final String content;
   if (context.config.models.useFreezed) {
     content = context.config.models.useJsonSerializable
@@ -196,24 +198,15 @@ class ${operation.pascal}Dto {
   }
 
   return GeneratedFile(
-    path: p.join(
-      context.paths.data,
-      'remote',
-      'models',
-      '${operation.snake}_dto.dart',
-    ),
+    path: p.join(dataPaths.remoteModels, '${operation.snake}_dto.dart'),
     content: content,
   );
 }
 
 GeneratedFile _box(TemplateContext context, NameCases operation) {
+  final dataPaths = DataPaths.resolve(context.config, context.paths.data);
   return GeneratedFile(
-    path: p.join(
-      context.paths.data,
-      'local',
-      'models',
-      '${operation.snake}_box.dart',
-    ),
+    path: p.join(dataPaths.localModels, '${operation.snake}_box.dart'),
     content: switch (context.config.localStorage) {
       LocalStorage.hive =>
         '''
@@ -273,6 +266,7 @@ GeneratedFile _remoteMapper(
   NameCases operation,
   OperationKind kind,
 ) {
+  final dataPaths = DataPaths.resolve(context.config, context.paths.data);
   final dtoToBox = kind == OperationKind.cached
       ? '''
 
@@ -281,20 +275,24 @@ GeneratedFile _remoteMapper(
   }
 '''
       : '';
+  final boxImportPath = relativeDartImport(
+    fromDirectory: dataPaths.mappers,
+    targetPath: p.join(dataPaths.localModels, '${operation.snake}_box.dart'),
+  );
+  final dtoImportPath = relativeDartImport(
+    fromDirectory: dataPaths.mappers,
+    targetPath: p.join(dataPaths.remoteModels, '${operation.snake}_dto.dart'),
+  );
   final boxImport = kind == OperationKind.cached
-      ? "import '../local/models/${operation.snake}_box.dart';\n"
+      ? "import '$boxImportPath';\n"
       : '';
 
   return GeneratedFile(
-    path: p.join(
-      context.paths.data,
-      'mappers',
-      '${operation.snake}_mapper.dart',
-    ),
+    path: p.join(dataPaths.mappers, '${operation.snake}_mapper.dart'),
     content:
         '''
 import '${_domainImport(context, 'entities/${operation.snake}_entity.dart')}';
-${boxImport}import '../remote/models/${operation.snake}_dto.dart';
+${boxImport}import '$dtoImportPath';
 
 extension ${operation.pascal}DtoMapper on ${operation.pascal}Dto {
   ${operation.pascal}Entity toEntity() {
@@ -310,17 +308,18 @@ GeneratedFile _localMapper(
   NameCases operation,
   OperationKind kind,
 ) {
+  final dataPaths = DataPaths.resolve(context.config, context.paths.data);
+  final boxImport = relativeDartImport(
+    fromDirectory: dataPaths.mappers,
+    targetPath: p.join(dataPaths.localModels, '${operation.snake}_box.dart'),
+  );
   if (kind == OperationKind.cached) {
     return GeneratedFile(
-      path: p.join(
-        context.paths.data,
-        'mappers',
-        '${operation.snake}_box_mapper.dart',
-      ),
+      path: p.join(dataPaths.mappers, '${operation.snake}_box_mapper.dart'),
       content:
           '''
 import '${_domainImport(context, 'entities/${operation.snake}_entity.dart')}';
-import '../local/models/${operation.snake}_box.dart';
+import '$boxImport';
 
 extension ${operation.pascal}BoxMapper on ${operation.pascal}Box {
   ${operation.pascal}Entity toEntity() {
@@ -332,15 +331,11 @@ extension ${operation.pascal}BoxMapper on ${operation.pascal}Box {
   }
 
   return GeneratedFile(
-    path: p.join(
-      context.paths.data,
-      'mappers',
-      '${operation.snake}_mapper.dart',
-    ),
+    path: p.join(dataPaths.mappers, '${operation.snake}_mapper.dart'),
     content:
         '''
 import '${_domainImport(context, 'entities/${operation.snake}_entity.dart')}';
-import '../local/models/${operation.snake}_box.dart';
+import '$boxImport';
 
 extension ${operation.pascal}BoxMapper on ${operation.pascal}Box {
   ${operation.pascal}Entity toEntity() {

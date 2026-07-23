@@ -6,6 +6,8 @@ import 'package:yaml/yaml.dart';
 
 enum ProjectStructure { featureFirst, layeredPackages, verticalPackages }
 
+enum DataLayout { sourceFirst, typeFirst }
+
 enum StateManagement { getx, bloc, provider, none }
 
 enum NetworkClient { dio, abstract }
@@ -35,6 +37,7 @@ class CleanArchitectConfig {
     required this.useEitherFailure,
     required this.flutter,
     this.configVersion = currentConfigVersion,
+    this.dataLayout = DataLayout.sourceFirst,
   });
 
   factory CleanArchitectConfig.defaults() {
@@ -98,6 +101,12 @@ class CleanArchitectConfig {
         ProjectStructure.values,
         _structureName,
         defaults.structure,
+      ),
+      dataLayout: _enumValue(
+        root['data_layout'],
+        DataLayout.values,
+        _dataLayoutName,
+        defaults.dataLayout,
       ),
       stateManagement: _enumValue(
         root['state_management'],
@@ -177,6 +186,7 @@ class CleanArchitectConfig {
 
   final int configVersion;
   final ProjectStructure structure;
+  final DataLayout dataLayout;
   final StateManagement stateManagement;
   final NetworkClient network;
   final LocalStorage localStorage;
@@ -194,6 +204,7 @@ class CleanArchitectConfig {
 clean_architect:
   config_version: $currentConfigVersion
   structure: layered_packages # layered_packages, feature_first, or vertical_packages
+  data_layout: source_first # source_first or type_first
   state_management: getx # getx, bloc, provider, or none
   network: dio # dio or abstract
   local_storage: secure_storage # secure_storage, shared_preferences, hive, objectbox, or abstract
@@ -220,6 +231,7 @@ clean_architect:
   }
 
   String get structureName => _structureName(structure);
+  String get dataLayoutName => _dataLayoutName(dataLayout);
   String get stateManagementName => _stateName(stateManagement);
   String get networkName => _networkName(network);
   String get localStorageName => _storageName(localStorage);
@@ -499,6 +511,13 @@ String _structureName(ProjectStructure structure) {
     ProjectStructure.featureFirst => 'feature_first',
     ProjectStructure.layeredPackages => 'layered_packages',
     ProjectStructure.verticalPackages => 'vertical_packages',
+  };
+}
+
+String _dataLayoutName(DataLayout layout) {
+  return switch (layout) {
+    DataLayout.sourceFirst => 'source_first',
+    DataLayout.typeFirst => 'type_first',
   };
 }
 

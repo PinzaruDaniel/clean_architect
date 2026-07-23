@@ -2,6 +2,7 @@ import 'package:path/path.dart' as p;
 
 import '../case_utils.dart';
 import '../config.dart';
+import '../data_paths.dart';
 import '../generated_file.dart';
 import '../generator.dart';
 
@@ -163,23 +164,54 @@ GeneratedFile _authUseCase(String domain, String name, String content) {
 }
 
 List<GeneratedFile> _data(TemplateContext context) {
-  final data = context.paths.data;
+  final dataPaths = DataPaths.resolve(context.config, context.paths.data);
+  final tokenDtoPath = p.join(dataPaths.remoteModels, 'auth_token_dto.dart');
+  final requestDtoPath = p.join(
+    dataPaths.remoteModels,
+    'login_request_dto.dart',
+  );
+  final mapperPath = p.join(dataPaths.mappers, 'auth_token_mapper.dart');
+  final localSourcePath = p.join(
+    dataPaths.localDataSources,
+    'auth_local_data_source.dart',
+  );
+  final remoteSourcePath = p.join(
+    dataPaths.remoteDataSources,
+    'auth_remote_data_source.dart',
+  );
+  final mapperDtoImport = relativeDartImport(
+    fromDirectory: dataPaths.mappers,
+    targetPath: tokenDtoPath,
+  );
+  final repositoryMapperImport = relativeDartImport(
+    fromDirectory: dataPaths.repositories,
+    targetPath: mapperPath,
+  );
+  final repositoryRequestImport = relativeDartImport(
+    fromDirectory: dataPaths.repositories,
+    targetPath: requestDtoPath,
+  );
+  final repositoryLocalSourceImport = relativeDartImport(
+    fromDirectory: dataPaths.repositories,
+    targetPath: localSourcePath,
+  );
+  final repositoryRemoteSourceImport = relativeDartImport(
+    fromDirectory: dataPaths.repositories,
+    targetPath: remoteSourcePath,
+  );
 
   return [
+    GeneratedFile(path: tokenDtoPath, content: _authTokenDto(context.config)),
     GeneratedFile(
-      path: p.join(data, 'remote', 'models', 'auth_token_dto.dart'),
-      content: _authTokenDto(context.config),
-    ),
-    GeneratedFile(
-      path: p.join(data, 'remote', 'models', 'login_request_dto.dart'),
+      path: requestDtoPath,
       content: _loginRequestDto(context.config),
     ),
     GeneratedFile(
-      path: p.join(data, 'mappers', 'auth_token_mapper.dart'),
+      path: mapperPath,
       content:
           '''
 import '${_domainImport(context, 'entities/auth_token_entity.dart')}';
-import '../remote/models/auth_token_dto.dart';
+import '$mapperDtoImport';
 
 extension AuthTokenDtoMapper on AuthTokenDto {
   AuthTokenEntity toEntity() {
@@ -192,29 +224,23 @@ extension AuthTokenDtoMapper on AuthTokenDto {
 }
 ''',
     ),
+    GeneratedFile(path: remoteSourcePath, content: _remoteSource(context)),
     GeneratedFile(
-      path: p.join(data, 'remote', 'auth_remote_data_source.dart'),
-      content: _remoteSource(context),
-    ),
-    GeneratedFile(
-      path: p.join(data, 'local', 'models', 'auth_box.dart'),
+      path: p.join(dataPaths.localModels, 'auth_box.dart'),
       content: _authBox(context),
     ),
+    GeneratedFile(path: localSourcePath, content: _localSource(context)),
     GeneratedFile(
-      path: p.join(data, 'local', 'auth_local_data_source.dart'),
-      content: _localSource(context),
-    ),
-    GeneratedFile(
-      path: p.join(data, 'repositories', 'auth_repository_impl.dart'),
+      path: p.join(dataPaths.repositories, 'auth_repository_impl.dart'),
       content:
           '''
 ${_injectableImport(context)}import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
 import '${_domainImport(context, 'entities/auth_token_entity.dart')}';
 import '${_domainImport(context, 'repositories/auth_repository.dart')}';
-import '../mappers/auth_token_mapper.dart';
-import '../remote/models/login_request_dto.dart';
-import '../local/auth_local_data_source.dart';
-import '../remote/auth_remote_data_source.dart';
+import '$repositoryMapperImport';
+import '$repositoryRequestImport';
+import '$repositoryLocalSourceImport';
+import '$repositoryRemoteSourceImport';
 
 ${_lazySingletonAsAnnotation(context, 'AuthRepository')}
 class AuthRepositoryImpl implements AuthRepository {
@@ -553,9 +579,14 @@ class LoginRequestDto {
 }
 
 String _remoteSource(TemplateContext context) {
+  final dataPaths = DataPaths.resolve(context.config, context.paths.data);
+  final dtoImport = relativeDartImport(
+    fromDirectory: dataPaths.remoteDataSources,
+    targetPath: p.join(dataPaths.remoteModels, 'auth_token_dto.dart'),
+  );
   if (context.config.network == NetworkClient.abstract) {
     return '''
-import 'models/auth_token_dto.dart';
+import '$dtoImport';
 
 abstract interface class AuthRemoteDataSource {
   Future<AuthTokenDto> login(Map<String, dynamic> body);
@@ -572,7 +603,7 @@ import 'package:dio/dio.dart';
 import 'package:retrofit/retrofit.dart';
 ${_injectableImport(context)}
 
-import 'models/auth_token_dto.dart';
+import '$dtoImport';
 
 part 'auth_remote_data_source.g.dart';
 
@@ -651,6 +682,11 @@ class AuthBox {
 
 String _localSource(TemplateContext context) {
   final config = context.config;
+  final dataPaths = DataPaths.resolve(config, context.paths.data);
+  final boxImport = relativeDartImport(
+    fromDirectory: dataPaths.localDataSources,
+    targetPath: p.join(dataPaths.localModels, 'auth_box.dart'),
+  );
   final annotation = _lazySingletonAsAnnotation(context, 'AuthLocalDataSource');
 
   if (config.localStorage == LocalStorage.secureStorage) {
@@ -712,7 +748,7 @@ class AuthLocalDataSourceImpl implements AuthLocalDataSource {
 ${_injectableImport(context)}import 'package:hive_ce/hive.dart';
 
 import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
-import 'models/auth_box.dart';
+import '$boxImport';
 
 abstract class AuthLocalDataSource {
   Future<void> saveCredentials(AuthCredentialsEntity credentials);
@@ -764,7 +800,7 @@ class AuthLocalDataSourceImpl implements AuthLocalDataSource {
 ${_injectableImport(context)}import 'package:objectbox/objectbox.dart';
 
 import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
-import 'models/auth_box.dart';
+import '$boxImport';
 
 abstract class AuthLocalDataSource {
   Future<void> saveCredentials(AuthCredentialsEntity credentials);
@@ -807,7 +843,7 @@ class AuthLocalDataSourceImpl implements AuthLocalDataSource {
 
   return '''
 ${_injectableImport(context)}import '${_domainImport(context, 'entities/auth_credentials_entity.dart')}';
-import 'models/auth_box.dart';
+import '$boxImport';
 
 abstract class AuthLocalDataSource {
   Future<void> saveCredentials(AuthCredentialsEntity credentials);
@@ -847,6 +883,7 @@ class AuthLocalDataSourceImpl implements AuthLocalDataSource {
 }
 
 GeneratedFile _di(TemplateContext context) {
+  final dataPaths = DataPaths.resolve(context.config, context.paths.data);
   if (context.config.dependencyInjection == DependencyInjection.injectable) {
     return GeneratedFile(
       path: p.join(context.paths.di, '.gitkeep'),
@@ -858,9 +895,9 @@ GeneratedFile _di(TemplateContext context) {
     path: p.join(context.paths.di, 'auth_di.dart'),
     content:
         '''
-import '${_dataImport(context, 'repositories/auth_repository_impl.dart')}';
-import '${_dataImport(context, 'local/auth_local_data_source.dart')}';
-import '${_dataImport(context, 'remote/auth_remote_data_source.dart')}';
+import '${_dataFileImport(context, p.join(dataPaths.repositories, 'auth_repository_impl.dart'))}';
+import '${_dataFileImport(context, p.join(dataPaths.localDataSources, 'auth_local_data_source.dart'))}';
+import '${_dataFileImport(context, p.join(dataPaths.remoteDataSources, 'auth_remote_data_source.dart'))}';
 import '${_domainImport(context, 'repositories/auth_repository.dart')}';
 import '${_domainImport(context, 'usecases/clear_auth_credentials_use_case.dart')}';
 import '${_domainImport(context, 'usecases/get_auth_credentials_use_case.dart')}';
@@ -1353,6 +1390,16 @@ String _domainImport(TemplateContext context, String path) {
 
 String _dataImport(TemplateContext context, String path) {
   return _packageImport(context.paths.data, path);
+}
+
+String _dataFileImport(TemplateContext context, String targetPath) {
+  return _dataImport(
+    context,
+    relativeDartImport(
+      fromDirectory: context.paths.data,
+      targetPath: targetPath,
+    ),
+  );
 }
 
 String _packageRoot(String libPath) {

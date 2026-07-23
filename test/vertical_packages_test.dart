@@ -83,6 +83,22 @@ void main() {
           ),
         ),
       );
+      expect(
+        paths,
+        contains(
+          p.join(
+            'packages',
+            'features',
+            'base_feature',
+            'lib',
+            'src',
+            'data',
+            'data_sources',
+            'remote',
+            '.gitkeep',
+          ),
+        ),
+      );
     },
   );
 
@@ -126,8 +142,8 @@ void main() {
     final dataModule = File(
       p.join(ordersRoot, 'lib', 'src', 'di', 'data_module.dart'),
     ).readAsStringSync();
-    expect(dataModule, contains("../data/local/models/orders_box.dart"));
-    expect(dataModule, contains("../data/local/models/sync_catalog_box.dart"));
+    expect(dataModule, contains("../data/models/local/orders_box.dart"));
+    expect(dataModule, contains("../data/models/local/sync_catalog_box.dart"));
     expect(dataModule, contains('Future<Box<OrdersBox>> ordersBox()'));
     expect(
       dataModule,
@@ -173,6 +189,7 @@ void main() {
 CleanArchitectConfig _config() {
   return const CleanArchitectConfig(
     structure: ProjectStructure.verticalPackages,
+    dataLayout: DataLayout.typeFirst,
     stateManagement: StateManagement.bloc,
     network: NetworkClient.dio,
     localStorage: LocalStorage.hive,
@@ -201,6 +218,7 @@ String _yaml() {
 clean_architect:
   config_version: 1
   structure: vertical_packages
+  data_layout: type_first
   state_management: bloc
   network: dio
   local_storage: hive

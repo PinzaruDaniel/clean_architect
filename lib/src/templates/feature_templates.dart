@@ -2,11 +2,13 @@ import 'package:path/path.dart' as p;
 
 import '../case_utils.dart';
 import '../config.dart';
+import '../data_paths.dart';
 import '../generated_file.dart';
 import '../generator.dart';
 
 List<GeneratedFile> featureTemplates(TemplateContext context) {
   final feature = context.cases;
+  final dataPaths = DataPaths.resolve(context.config, context.paths.data);
   final files = <GeneratedFile>[
     if (context.config.structure == ProjectStructure.verticalPackages)
       _publicLibrary(context),
@@ -38,51 +40,34 @@ List<GeneratedFile> featureTemplates(TemplateContext context) {
       content: _useCase(context),
     ),
     GeneratedFile(
-      path: p.join(
-        context.paths.data,
-        'remote',
-        'models',
-        '${feature.snake}_dto.dart',
-      ),
+      path: p.join(dataPaths.remoteModels, '${feature.snake}_dto.dart'),
       content: _dto(context),
     ),
     GeneratedFile(
-      path: p.join(
-        context.paths.data,
-        'mappers',
-        '${feature.snake}_mapper.dart',
-      ),
+      path: p.join(dataPaths.mappers, '${feature.snake}_mapper.dart'),
       content: _mapper(context),
     ),
     GeneratedFile(
       path: p.join(
-        context.paths.data,
-        'remote',
+        dataPaths.remoteDataSources,
         '${feature.snake}_remote_data_source.dart',
       ),
       content: _remoteDataSource(context),
     ),
     GeneratedFile(
-      path: p.join(
-        context.paths.data,
-        'local',
-        'models',
-        '${feature.snake}_box.dart',
-      ),
+      path: p.join(dataPaths.localModels, '${feature.snake}_box.dart'),
       content: _localBox(context),
     ),
     GeneratedFile(
       path: p.join(
-        context.paths.data,
-        'local',
+        dataPaths.localDataSources,
         '${feature.snake}_local_data_source.dart',
       ),
       content: _localSource(context),
     ),
     GeneratedFile(
       path: p.join(
-        context.paths.data,
-        'repositories',
+        dataPaths.repositories,
         '${feature.snake}_repository_impl.dart',
       ),
       content: _repositoryImpl(context),
@@ -240,6 +225,11 @@ class ${feature.pascal}Box {
 
 String _localSource(TemplateContext context) {
   final feature = context.cases;
+  final dataPaths = DataPaths.resolve(context.config, context.paths.data);
+  final boxImport = relativeDartImport(
+    fromDirectory: dataPaths.localDataSources,
+    targetPath: p.join(dataPaths.localModels, '${feature.snake}_box.dart'),
+  );
   final annotation = _lazySingletonAsAnnotation(
     context,
     '${feature.pascal}LocalDataSource',
@@ -248,7 +238,7 @@ String _localSource(TemplateContext context) {
     return '''
 ${_injectableImport(context)}import 'package:hive_ce/hive.dart';
 
-import 'models/${feature.snake}_box.dart';
+import '$boxImport';
 
 abstract class ${feature.pascal}LocalDataSource {
   Future<void> cacheItems(List<Object> items);
@@ -281,7 +271,7 @@ class ${feature.pascal}LocalDataSourceImpl implements ${feature.pascal}LocalData
     return '''
 ${_injectableImport(context)}import 'package:objectbox/objectbox.dart';
 
-import 'models/${feature.snake}_box.dart';
+import '$boxImport';
 
 abstract class ${feature.pascal}LocalDataSource {
   Future<void> cacheItems(List<Object> items);
@@ -307,7 +297,7 @@ class ${feature.pascal}LocalDataSourceImpl implements ${feature.pascal}LocalData
   }
 
   return '''
-${_injectableImport(context)}import 'models/${feature.snake}_box.dart';
+${_injectableImport(context)}import '$boxImport';
 
 abstract class ${feature.pascal}LocalDataSource {
   Future<void> cacheItems(List<Object> items);
@@ -449,15 +439,24 @@ class ${feature.pascal}Dto {
 
 String _mapper(TemplateContext context) {
   final feature = context.cases;
+  final dataPaths = DataPaths.resolve(context.config, context.paths.data);
   final entityImport = _domainImport(
     context,
     'entities/${feature.snake}_entity.dart',
   );
+  final boxImport = relativeDartImport(
+    fromDirectory: dataPaths.mappers,
+    targetPath: p.join(dataPaths.localModels, '${feature.snake}_box.dart'),
+  );
+  final dtoImport = relativeDartImport(
+    fromDirectory: dataPaths.mappers,
+    targetPath: p.join(dataPaths.remoteModels, '${feature.snake}_dto.dart'),
+  );
 
   return '''
 import '$entityImport';
-import '../local/models/${feature.snake}_box.dart';
-import '../remote/models/${feature.snake}_dto.dart';
+import '$boxImport';
+import '$dtoImport';
 
 extension ${feature.pascal}DtoMapper on ${feature.pascal}Dto {
   ${feature.pascal}Entity toEntity() {
@@ -479,9 +478,14 @@ extension ${feature.pascal}BoxMapper on ${feature.pascal}Box {
 
 String _remoteDataSource(TemplateContext context) {
   final feature = context.cases;
+  final dataPaths = DataPaths.resolve(context.config, context.paths.data);
+  final dtoImport = relativeDartImport(
+    fromDirectory: dataPaths.remoteDataSources,
+    targetPath: p.join(dataPaths.remoteModels, '${feature.snake}_dto.dart'),
+  );
   if (context.config.network == NetworkClient.abstract) {
     return '''
-import 'models/${feature.snake}_dto.dart';
+import '$dtoImport';
 
 abstract interface class ${feature.pascal}RemoteDataSource {
   Future<List<${feature.pascal}Dto>> getItems();
@@ -498,7 +502,7 @@ import 'package:dio/dio.dart';
 import 'package:retrofit/retrofit.dart';
 ${_injectableImport(context)}
 
-import 'models/${feature.snake}_dto.dart';
+import '$dtoImport';
 
 part '${feature.snake}_remote_data_source.g.dart';
 
@@ -514,6 +518,7 @@ $factoryAnnotation  factory ${feature.pascal}RemoteDataSource(${context.config.d
 
 String _repositoryImpl(TemplateContext context) {
   final feature = context.cases;
+  final dataPaths = DataPaths.resolve(context.config, context.paths.data);
   final entityImport = _domainImport(
     context,
     'entities/${feature.snake}_entity.dart',
@@ -521,6 +526,24 @@ String _repositoryImpl(TemplateContext context) {
   final repositoryImport = _domainImport(
     context,
     'repositories/${feature.snake}_repository.dart',
+  );
+  final mapperImport = relativeDartImport(
+    fromDirectory: dataPaths.repositories,
+    targetPath: p.join(dataPaths.mappers, '${feature.snake}_mapper.dart'),
+  );
+  final localSourceImport = relativeDartImport(
+    fromDirectory: dataPaths.repositories,
+    targetPath: p.join(
+      dataPaths.localDataSources,
+      '${feature.snake}_local_data_source.dart',
+    ),
+  );
+  final remoteSourceImport = relativeDartImport(
+    fromDirectory: dataPaths.repositories,
+    targetPath: p.join(
+      dataPaths.remoteDataSources,
+      '${feature.snake}_remote_data_source.dart',
+    ),
   );
 
   final eitherImport = context.config.useEitherFailure
@@ -541,9 +564,9 @@ String _repositoryImpl(TemplateContext context) {
   return '''
 ${_injectableImport(context)}${eitherImport}import '$entityImport';
 import '$repositoryImport';
-import '../mappers/${feature.snake}_mapper.dart';
-import '../local/${feature.snake}_local_data_source.dart';
-import '../remote/${feature.snake}_remote_data_source.dart';
+import '$mapperImport';
+import '$localSourceImport';
+import '$remoteSourceImport';
 
 ${_lazySingletonAsAnnotation(context, '${feature.pascal}Repository')}
 class ${feature.pascal}RepositoryImpl implements ${feature.pascal}Repository {
@@ -566,6 +589,7 @@ class ${feature.pascal}RepositoryImpl implements ${feature.pascal}Repository {
 
 GeneratedFile _di(TemplateContext context) {
   final feature = context.cases;
+  final dataPaths = DataPaths.resolve(context.config, context.paths.data);
   if (context.config.dependencyInjection == DependencyInjection.injectable) {
     return GeneratedFile(
       path: p.join(context.paths.di, '.gitkeep'),
@@ -577,9 +601,9 @@ GeneratedFile _di(TemplateContext context) {
     path: p.join(context.paths.di, '${feature.snake}_di.dart'),
     content:
         '''
-import '${_dataImport(context, 'repositories/${feature.snake}_repository_impl.dart')}';
-import '${_dataImport(context, 'local/${feature.snake}_local_data_source.dart')}';
-import '${_dataImport(context, 'remote/${feature.snake}_remote_data_source.dart')}';
+import '${_dataFileImport(context, p.join(dataPaths.repositories, '${feature.snake}_repository_impl.dart'))}';
+import '${_dataFileImport(context, p.join(dataPaths.localDataSources, '${feature.snake}_local_data_source.dart'))}';
+import '${_dataFileImport(context, p.join(dataPaths.remoteDataSources, '${feature.snake}_remote_data_source.dart'))}';
 import '${_domainImport(context, 'repositories/${feature.snake}_repository.dart')}';
 import '${_domainImport(context, 'usecases/get_${feature.snake}_list_use_case.dart')}';
 
@@ -988,6 +1012,16 @@ String _failureImport(TemplateContext context) {
 
 String _dataImport(TemplateContext context, String path) {
   return _packageImport(context.paths.data, path);
+}
+
+String _dataFileImport(TemplateContext context, String targetPath) {
+  return _dataImport(
+    context,
+    relativeDartImport(
+      fromDirectory: context.paths.data,
+      targetPath: targetPath,
+    ),
+  );
 }
 
 String _domainPresentationImport(TemplateContext context, String path) {

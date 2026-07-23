@@ -113,6 +113,7 @@ This creates `clean_architect.yaml`:
 clean_architect:
   config_version: 1
   structure: layered_packages # layered_packages, feature_first, or vertical_packages
+  data_layout: source_first # source_first or type_first
   state_management: getx # getx, bloc, provider, or none
   network: dio # dio or abstract
   local_storage: secure_storage # secure_storage, shared_preferences, hive, objectbox, or abstract
@@ -144,6 +145,7 @@ clean_architect:
 | --- | --- | --- | --- |
 | `config_version` | positive integer | `1` | Configuration schema version used for future migrations. |
 | `structure` | `layered_packages`, `feature_first`, `vertical_packages` | `layered_packages` | How feature paths and package boundaries are resolved. |
+| `data_layout` | `source_first`, `type_first` | `source_first` | Whether data files are grouped by source first or by artifact type first. |
 | `state_management` | `getx`, `bloc`, `provider`, `none` | `getx` | Presentation controller/page style. |
 | `network` | `dio`, `abstract` | `dio` | Remote data source style and generated data dependencies. |
 | `local_storage` | `secure_storage`, `shared_preferences`, `hive`, `objectbox`, `abstract` | `secure_storage` | Local auth credential storage style and generated storage dependencies. |
@@ -252,6 +254,63 @@ mode. `--dry-run` prints the command without executing it.
 `--skip-presentation` disables this step for the current command.
 
 Run `dart pub get` in the other layer packages as needed.
+
+## Data Layer Layouts
+
+`data_layout` changes only the internal organization of each feature's data
+layer. Domain, presentation, DI, package roots, class names, and command
+behavior remain unchanged.
+
+The default `source_first` mode keeps each model beside its source category:
+
+```yaml
+clean_architect:
+  data_layout: source_first
+```
+
+```txt
+data/lib/features/orders/
+  remote/
+    models/
+      orders_dto.dart
+    orders_remote_data_source.dart
+  local/
+    models/
+      orders_box.dart
+    orders_local_data_source.dart
+  mappers/
+  repositories/
+```
+
+Use `type_first` to keep models and data sources in separate top-level
+directories:
+
+```yaml
+clean_architect:
+  data_layout: type_first
+```
+
+```txt
+data/lib/features/orders/
+  data_sources/
+    remote/
+      orders_remote_data_source.dart
+    local/
+      orders_local_data_source.dart
+  models/
+    remote/
+      orders_dto.dart
+    local/
+      orders_box.dart
+  mappers/
+  repositories/
+```
+
+The setting applies to `create architecture`, `create auth`, `create feature`,
+all remote/local/cached operation commands, and generated Injectable
+`DataModule` imports. It also works inside each feature package when
+`structure: vertical_packages` is selected. Existing configurations that omit
+the key continue to generate `source_first`.
 
 ## Generated Output Contract
 
@@ -1131,12 +1190,12 @@ then runs dependency resolution, code generation, analysis in every layer, and t
 | --- | --- |
 | `default_getx_manual_dio_secure` | Layered packages, GetX, manual DI, Dio, secure storage |
 | `bloc_injectable_hive_feature_first` | Feature first, Bloc, Injectable, Hive CE |
-| `provider_injectable_objectbox` | Layered packages, Provider, Injectable, ObjectBox |
+| `provider_injectable_objectbox` | Layered packages, type-first data layout, Provider, Injectable, ObjectBox |
 | `none_abstract_plain_feature_first` | Feature first, no state package, abstract sources, plain Dart models |
 | `either_enabled` | Layered packages with `Either<Failure, T>` returns |
 | `shared_preferences_json_only_custom_paths` | Shared preferences, JSON-only models, and custom public layer paths |
 | `freezed_without_json` | Freezed-only models, Injectable, and manual JSON methods |
-| `vertical_bloc_injectable_hive_either` | Vertical feature packages, runnable app/core packages, Bloc, Injectable, Hive CE, and Either |
+| `vertical_bloc_injectable_hive_either` | Vertical feature packages, type-first data layout, runnable app/core packages, Bloc, Injectable, Hive CE, and Either |
 
 Normal `dart test` runs skip these expensive cases. Run the full matrix with:
 

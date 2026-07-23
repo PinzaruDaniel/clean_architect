@@ -2,6 +2,7 @@ import 'package:path/path.dart' as p;
 
 import '../case_utils.dart';
 import '../config.dart';
+import '../data_paths.dart';
 import '../generated_file.dart';
 import '../generator.dart';
 
@@ -340,6 +341,9 @@ lives in `$coreRoot/`. Every business feature is an independently analyzable
 package below `$featuresRoot/` and owns its domain, data, presentation, and
 dependency-injection code under `lib/src/`.
 
+Feature data files use the `${context.config.dataLayoutName}` layout selected
+in `clean_architect.yaml`.
+
 Dependency direction:
 
 1. The app may depend on core and feature packages.
@@ -610,6 +614,14 @@ List<GeneratedFile> _verticalDataModuleFiles(TemplateContext context) {
 }
 
 String _verticalDataModule(TemplateContext context) {
+  final dataPaths = DataPaths.resolve(context.config, context.paths.data);
+  final boxImport = relativeDartImport(
+    fromDirectory: context.paths.di,
+    targetPath: p.join(
+      dataPaths.localModels,
+      '${context.cases.snake}_box.dart',
+    ),
+  );
   final imports = <String>[
     "import 'package:injectable/injectable.dart';",
     if (context.config.network == NetworkClient.dio)
@@ -624,7 +636,7 @@ String _verticalDataModule(TemplateContext context) {
       "import 'package:shared_preferences/shared_preferences.dart';",
     if (context.config.localStorage == LocalStorage.hive ||
         context.config.localStorage == LocalStorage.objectbox)
-      "import '../data/local/models/${context.cases.snake}_box.dart';",
+      "import '$boxImport';",
     if (context.config.localStorage == LocalStorage.objectbox)
       "import '../../objectbox.g.dart';",
   ];
@@ -956,6 +968,15 @@ List<GeneratedFile> _dataModuleFiles(TemplateContext context) {
 }
 
 String _dataModule(TemplateContext context) {
+  final dataPaths = DataPaths.resolve(context.config, context.paths.data);
+  final dataLib = p.join(_packageRoot(context.paths.data), 'lib');
+  final boxImport = relativeDartImport(
+    fromDirectory: dataLib,
+    targetPath: p.join(
+      dataPaths.localModels,
+      '${context.cases.snake}_box.dart',
+    ),
+  );
   final imports = <String>[
     "import 'package:injectable/injectable.dart';",
     if (context.config.network == NetworkClient.dio)
@@ -970,7 +991,7 @@ String _dataModule(TemplateContext context) {
       "import 'package:shared_preferences/shared_preferences.dart';",
     if (context.config.localStorage == LocalStorage.hive ||
         context.config.localStorage == LocalStorage.objectbox)
-      "import 'features/${context.cases.snake}/local/models/${context.cases.snake}_box.dart';",
+      "import '$boxImport';",
     if (context.config.localStorage == LocalStorage.objectbox)
       "import 'objectbox.g.dart';",
   ];
